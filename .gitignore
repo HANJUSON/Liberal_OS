@@ -1,0 +1,42 @@
+# API keys / secrets
+.env
+.env.*
+!.env.example
+*.key
+
+# LLM response cache
+.cache/llm/
+
+# Outputs and bench results
+out/
+
+# Build artifacts (xv6)
+xv6-src/kernel/*.o
+xv6-src/kernel/*.d
+xv6-src/kernel/*.asm
+xv6-src/kernel/*.sym
+xv6-src/user/*.o
+xv6-src/user/*.d
+xv6-src/user/*.asm
+xv6-src/user/*.sym
+xv6-src/user/_*
+xv6-src/user/initcode
+xv6-src/user/initcode.out
+xv6-src/user/usys.S
+xv6-src/kernel/kernel
+xv6-src/fs.img
+xv6-src/mkfs/mkfs
+
+# Editor / OS
+*.swp
+*.swo
+.DS_Store
+__pycache__/
+*.pyc
+*.pyo
+
+# WSL Zone.Identifier files
+*:Zone.Identifier
+
+# Original harness drop-in (root-owned, superseded by root-level files)
+files/
