@@ -75,7 +75,7 @@
 - **assignee**: kernel
 - **note**: fork/wait/pipe 기본 동작 확인 후 PASS 출력
 
-### T-07 `[ ]` `tests/regression.sh` 골격
+### T-07 `[~]` `tests/regression.sh` 골격
 - **depends**: T-05, T-06
 - **files**: `tests/regression.sh`
 - **verify**: `make regression` → autotest + 기본 셸 명령 확인 + Proxy hello
