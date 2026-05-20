@@ -296,7 +296,7 @@
 
 ## Phase 7 — 산출물 (Week 13~14)
 
-### T-70 Technical Report 초안
+### T-70 `[x]` Technical Report 초안
 - **depends**: T-62
 - **files**: `docs/TECHNICAL_REPORT.md`
 - **verify**: 5,000~8,000 단어, §3.2 OS 매핑표가 첫 장에 포함
@@ -338,7 +338,7 @@
 
 ## 마지막 갱신
 
-2026-05-20 — Phase 1+2+3+4+5+6(부분) 완료
-  [x] T-01~T-10, T-20~T-27, T-30~T-36, T-40, T-41, T-50~T-52, T-60, T-61.
-  e2e mock + retry: 6 retries, 2 FAIL, 3 OK / 5 lines; priority scheduler 검증.
-  남은 작업: Phase 6 (T-62 실 벤치), Phase 7 (T-70~73, 보고서/슬라이드/데모).
+2026-05-20 — Phase 1+2+3+4+5+6(부분)+7-1 완료
+  [x] T-01~T-10, T-20~T-27, T-30~T-36, T-40, T-41, T-50~T-52, T-60, T-61, T-70.
+  Technical Report 초안 5,007 단어.
+  남은 작업: T-62 실 벤치 (사람), T-71 PROCESS.md, T-72 슬라이드, T-73 데모 GIF.
