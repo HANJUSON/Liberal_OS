@@ -117,7 +117,7 @@
 - **assignee**: kernel
 - **note**: 기본값은 `agent_role = "none"`, `priority = 0`
 
-### T-21 `[ ]` `setrole` 시스템 콜 추가
+### T-21 `[~]` `setrole` 시스템 콜 추가
 - **depends**: T-20
 - **files**: `xv6-src/kernel/syscall.c`, `xv6-src/kernel/syscall.h`, `xv6-src/kernel/sysproc.c`, `xv6-src/user/user.h`, `xv6-src/user/usys.pl`
 - **verify**: 유저 프로그램에서 `setrole("parser")` 호출 후 `agentstat`에 반영됨
