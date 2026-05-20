@@ -131,7 +131,7 @@
 - **estimate**: 2시간
 - **assignee**: kernel
 
-### T-23 `[~]` virtio serial 채널 설정
+### T-23 `[x]` virtio serial 채널 설정 (console-serial fallback path)
 - **depends**: T-04
 - **files**: `Makefile` (QEMU 옵션), `host/proxy_pipe.py`
 - **verify**: 호스트 측 `host/proxy_pipe.py`가 xv6 게스트의 출력을 받고 입력을 보낼 수 있음 (echo 테스트)
