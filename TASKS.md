@@ -271,14 +271,14 @@
 
 ## Phase 6 — 평가 (Week 13)
 
-### T-60 `bench/run_all.sh` 완성
+### T-60 `[~]` `bench/run_all.sh` 완성
 - **depends**: T-36, T-41, T-52
 - **files**: `bench/run_all.sh`
 - **verify**: 5개 실험 5회 반복 후 `out/bench/*.json` 생성
 - **estimate**: 2시간
 - **assignee**: bench
 
-### T-61 `bench/report.py` — REPORT.md 자동 생성
+### T-61 `[~]` `bench/report.py` — REPORT.md 자동 생성
 - **depends**: T-60
 - **files**: `bench/report.py`
 - **verify**: `python bench/report.py out/bench/ > out/REPORT.md` → 표 + 통계 포함된 마크다운
