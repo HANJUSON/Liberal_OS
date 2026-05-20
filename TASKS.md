@@ -153,14 +153,14 @@
 - **estimate**: 1시간
 - **assignee**: agent
 
-### T-26 `[ ]` host proxy daemon live 모드 (Upstage 통합)
+### T-26 `[~]` host proxy daemon live 모드 (Upstage 통합)
 - **depends**: T-25, T-04
 - **files**: `host/proxy_daemon.py`
 - **verify**: `MODE=live`로 xv6에서 짧은 LLM 요청 → solar-pro 응답
 - **estimate**: 1시간
 - **assignee**: agent
 
-### T-27 `[ ]` LLM 응답 캐시 (replay 모드)
+### T-27 `[~]` LLM 응답 캐시 (replay 모드)
 - **depends**: T-26
 - **files**: `host/proxy_daemon.py`, `.cache/llm/`
 - **verify**: 동일 입력 두 번 호출 시 두 번째는 캐시 사용 (timestamp 비교로 확인)
