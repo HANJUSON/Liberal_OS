@@ -30,7 +30,7 @@
 
 > 목표: CC 자율 작동의 기반 인프라 구축. 이 Phase가 끝나면 이후 Phase는 거의 자율로 돈다.
 
-### T-01 `.claude/settings.json` 작성
+### T-01 `[x]` `.claude/settings.json` 작성
 - **depends**: 없음
 - **files**: `.claude/settings.json`
 - **verify**: CC 재시작 후 `sudo` 명령 거부 확인
@@ -38,28 +38,28 @@
 - **assignee**: harness
 - **note**: allowed_tools / disallowed_tools 설정. `sudo`, `git push`, `rm -rf /` 차단
 
-### T-02 `.env.example` 및 `.gitignore` 정비
+### T-02 `[x]` `.env.example` 및 `.gitignore` 정비
 - **depends**: 없음
 - **files**: `.env.example`, `.gitignore`
 - **verify**: `.env`가 git에 추적되지 않는지 확인 (`git check-ignore .env`)
 - **estimate**: 10분
 - **assignee**: harness
 
-### T-03 xv6 빌드 환경 검증
+### T-03 `[x]` xv6 빌드 환경 검증
 - **depends**: 없음
 - **files**: 없음 (검증만)
 - **verify**: `cd xv6-src && make qemu` 실행, xv6 셸 프롬프트 `$ ` 도달 후 `Ctrl-A X`로 종료
 - **estimate**: 30분
 - **assignee**: harness
 
-### T-04 호스트 측 `hello-upstage.py` 작성
+### T-04 `[x]` 호스트 측 `hello-upstage.py` 작성
 - **depends**: T-02
 - **files**: `host/hello_upstage.py`, `host/requirements.txt`
 - **verify**: `MODE=live python host/hello_upstage.py` → solar-pro 응답 1줄 출력
 - **estimate**: 30분
 - **assignee**: agent
 
-### T-05 `tests/autotest.sh` 골격
+### T-05 `[ ]` `tests/autotest.sh` 골격
 - **depends**: T-03
 - **files**: `tests/autotest.sh`, `tests/inputs/smoke.in`, `Makefile`
 - **verify**: `make autotest` 실행 → 60초 이내 `PASS` 또는 `FAIL` 출력
@@ -67,7 +67,7 @@
 - **assignee**: harness
 - **note**: 헤드리스 QEMU + serial 캡처 + grep 판정. xv6 안에 `smoketest` 유저 프로그램 추가 필요
 
-### T-06 xv6 user `smoketest.c` 추가
+### T-06 `[ ]` xv6 user `smoketest.c` 추가
 - **depends**: T-03
 - **files**: `xv6-src/user/smoketest.c`, `xv6-src/Makefile`
 - **verify**: xv6 셸에서 `smoketest` 실행 → `SMOKE_TEST_PASS` 출력
@@ -75,28 +75,28 @@
 - **assignee**: kernel
 - **note**: fork/wait/pipe 기본 동작 확인 후 PASS 출력
 
-### T-07 `tests/regression.sh` 골격
+### T-07 `[ ]` `tests/regression.sh` 골격
 - **depends**: T-05, T-06
 - **files**: `tests/regression.sh`
 - **verify**: `make regression` → autotest + 기본 셸 명령 확인 + Proxy hello
 - **estimate**: 1시간
 - **assignee**: harness
 
-### T-08 `bench/summarize.py` 골격
+### T-08 `[x]` `bench/summarize.py` 골격
 - **depends**: T-02
 - **files**: `bench/summarize.py`
 - **verify**: 더미 JSON 5개 입력 시 평균·stdev 한 줄 JSON 출력
 - **estimate**: 30분
 - **assignee**: bench
 
-### T-09 패닉 dump 매크로 추가
+### T-09 `[ ]` 패닉 dump 매크로 추가
 - **depends**: T-03, T-06
 - **files**: `xv6-src/kernel/printf.c`, `xv6-src/kernel/proc.h`
 - **verify**: 일부러 패닉 유발 후 `[PANIC_DUMP_BEGIN]...[PANIC_DUMP_END]` 출력 확인
 - **estimate**: 1시간
 - **assignee**: kernel
 
-### T-10 `AGENT_LOG` 매크로 도입
+### T-10 `[ ]` `AGENT_LOG` 매크로 도입
 - **depends**: T-09
 - **files**: `xv6-src/kernel/agent_log.h`, `xv6-src/kernel/defs.h`
 - **verify**: 커널에서 `AGENT_LOG("info", "test %d", 42)` 호출 시 `[AGENT][info][...]` 출력
@@ -338,4 +338,5 @@
 
 ## 마지막 갱신
 
-`<여기에 CC가 작업 시작 시 자동 갱신>`
+2026-05-20 — T-03 blocker 해소, Phase 1 절반 완료 ([x]: T-01/02/03/04/08).
+다음 진행 후보: T-06 → T-05 → T-07 → T-09 → T-10.
