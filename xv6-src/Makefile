@@ -147,6 +147,7 @@ UPROGS=\
 	$U/_dorphan\
 	$U/_smoketest\
 	$U/_procfields\
+	$U/_setrole\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)

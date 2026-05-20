@@ -95,6 +95,27 @@ sys_kill(void)
   return kkill(pid);
 }
 
+// Liberal_OS T-21: set the calling proc's agent_role.
+// Accepts a string up to 15 chars (proc.agent_role is 16 with NUL). Empty
+// strings and oversize strings return -1 without touching state. Emits an
+// AGENT_LOG line so the harness can observe the change before T-22's
+// agentstat reader lands.
+uint64
+sys_setrole(void)
+{
+  char buf[16];
+  struct proc *p = myproc();
+  int n;
+
+  n = argstr(0, buf, sizeof(buf));
+  if(n <= 1)          // argstr returns length including NUL; <=1 means empty
+    return -1;
+
+  safestrcpy(p->agent_role, buf, sizeof(p->agent_role));
+  AGENT_LOG("info", "setrole pid=%d role=%s", p->pid, p->agent_role);
+  return 0;
+}
+
 // return how many clock tick interrupts have occurred
 // since start.
 uint64
