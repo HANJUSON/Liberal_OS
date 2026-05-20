@@ -96,7 +96,7 @@
 - **estimate**: 1시간
 - **assignee**: kernel
 
-### T-10 `[ ]` `AGENT_LOG` 매크로 도입
+### T-10 `[~]` `AGENT_LOG` 매크로 도입
 - **depends**: T-09
 - **files**: `xv6-src/kernel/agent_log.h`, `xv6-src/kernel/defs.h`
 - **verify**: 커널에서 `AGENT_LOG("info", "test %d", 42)` 호출 시 `[AGENT][info][...]` 출력
