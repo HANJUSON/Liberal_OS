@@ -89,7 +89,7 @@
 - **estimate**: 30분
 - **assignee**: bench
 
-### T-09 `[ ]` 패닉 dump 매크로 추가
+### T-09 `[~]` 패닉 dump 매크로 추가
 - **depends**: T-03, T-06
 - **files**: `xv6-src/kernel/printf.c`, `xv6-src/kernel/proc.h`
 - **verify**: 일부러 패닉 유발 후 `[PANIC_DUMP_BEGIN]...[PANIC_DUMP_END]` 출력 확인
