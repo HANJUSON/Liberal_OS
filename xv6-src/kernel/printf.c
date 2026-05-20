@@ -133,12 +133,49 @@ printf(char *fmt, ...)
   return 0;
 }
 
+// Walk the proc table and emit a one-line summary per active proc,
+// bracketed by sentinel tokens so the harness (and grep) can isolate
+// the dump from surrounding console noise. No locks: panic() is called
+// when the machine is already wedged; touching p->lock could deadlock.
+static void
+panic_dump(void)
+{
+  static char *states[] = {
+    [UNUSED]   "unused",
+    [USED]     "used",
+    [SLEEPING] "sleep",
+    [RUNNABLE] "runble",
+    [RUNNING]  "run",
+    [ZOMBIE]   "zombie",
+  };
+  struct proc *p;
+  char *st;
+  int i;
+
+  printf("[PANIC_DUMP_BEGIN]\n");
+  for(p = proc; p < &proc[NPROC]; p++){
+    if(p->state == UNUSED)
+      continue;
+    if(p->state >= 0 && p->state < NELEM(states) && states[p->state])
+      st = states[p->state];
+    else
+      st = "???";
+    printf("pid=%d state=%s name=", p->pid, st);
+    // p->name is a fixed buffer, may be unterminated; bound the print.
+    for(i = 0; i < (int)sizeof(p->name) && p->name[i]; i++)
+      consputc(p->name[i]);
+    printf(" killed=%d\n", p->killed);
+  }
+  printf("[PANIC_DUMP_END]\n");
+}
+
 void
 panic(char *s)
 {
   panicking = 1;
   printf("panic: ");
   printf("%s\n", s);
+  panic_dump();
   panicked = 1; // freeze uart output from other CPUs
   for(;;)
     ;

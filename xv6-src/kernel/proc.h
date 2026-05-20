@@ -105,3 +105,9 @@ struct proc {
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
 };
+
+// Global proc table. Defined in proc.c. Exposed here so that the panic
+// path in printf.c can walk it without holding locks (the machine is
+// already wedged when panic() is entered).
+extern struct proc proc[NPROC];
+
