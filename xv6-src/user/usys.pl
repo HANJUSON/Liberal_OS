@@ -46,3 +46,4 @@ entry("setrole");
 entry("agentstat");
 entry("proxylock");
 entry("proxyunlock");
+entry("setprio");

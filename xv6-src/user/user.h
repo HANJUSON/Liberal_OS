@@ -28,6 +28,7 @@ int setrole(const char*);
 int agentstat(void);
 int proxylock(void);
 int proxyunlock(void);
+int setprio(int);
 
 // ulib.c
 int stat(const char*, struct stat*);

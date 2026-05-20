@@ -156,6 +156,7 @@ UPROGS=\
 	$U/_fixsuggest\
 	$U/_evaluator\
 	$U/_triage\
+	$U/_priotest\
 
 fs.img: mkfs/mkfs README $(UPROGS) ../samples/short.log
 	@cp ../samples/short.log _short.log

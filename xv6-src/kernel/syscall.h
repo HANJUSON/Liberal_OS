@@ -25,3 +25,4 @@
 #define SYS_agentstat 23
 #define SYS_proxylock   24
 #define SYS_proxyunlock 25
+#define SYS_setprio     26

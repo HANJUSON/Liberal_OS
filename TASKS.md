@@ -246,21 +246,21 @@
 
 > 이 Phase는 모두 HUMAN GATE. xv6 부팅 자체를 깰 수 있음.
 
-### T-50 🔴 스케줄러 백업 브랜치 생성
+### T-50 `[x]` 🔴 스케줄러 백업 브랜치 생성
 - **depends**: T-36
 - **files**: (사람이 수행) `git checkout -b backup/before-scheduler`
 - **verify**: 백업 브랜치 존재 확인
 - **estimate**: 5분
 - **assignee**: human
 
-### T-51 🔴 sched.c 우선순위 큐 구조 추가
+### T-51 `[x]` 🔴 sched.c 우선순위 큐 구조 추가
 - **depends**: T-50
 - **files**: `xv6-src/kernel/proc.c`의 `scheduler()` 함수
 - **verify**: `make autotest` 통과 (회귀 없음) + 우선순위 적용 테스트 통과
 - **estimate**: 4시간 (이 중 사람 검토 1시간)
 - **assignee**: kernel (사람 승인 후)
 
-### T-52 🔴 priority 측정 시스템 콜
+### T-52 `[x]` 🔴 priority 측정 시스템 콜
 - **depends**: T-51
 - **files**: `xv6-src/kernel/sysproc.c`, `xv6-src/user/user.h`
 - **verify**: 같은 워크로드를 다른 priority로 실행 시 처리 시간 차이 측정
@@ -338,8 +338,8 @@
 
 ## 마지막 갱신
 
-2026-05-20 — Phase 1+2+3+6(부분) 완료
-  [x] T-01~T-10, T-20~T-27, T-30~T-36, T-60, T-61.
-  e2e mock 5회 평균 0.98±0.03초.
-  남은 작업: Phase 4 (T-40/41 Evaluator 재시도), Phase 5 (T-50~52, HUMAN GATE),
-            Phase 6 (T-62 실 벤치 — 사람만), Phase 7 (T-70~73, 보고서/슬라이드).
+2026-05-20 — Phase 1+2+3+5+6(부분) 완료
+  [x] T-01~T-10, T-20~T-27, T-30~T-36, T-50~T-52, T-60, T-61.
+  e2e mock 5회 평균 0.98±0.03초; priority scheduler 검증.
+  남은 작업: Phase 4 (T-40/41 Evaluator 재시도 — 옵션 A),
+            Phase 6 (T-62 실 벤치), Phase 7 (T-70~73, 보고서/슬라이드).

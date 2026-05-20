@@ -173,6 +173,23 @@ sys_agentstat(void)
   return 0;
 }
 
+// Liberal_OS T-52: set the calling proc's scheduling priority.
+// Higher values get scheduler() preference; default is 0. Clamped to
+// [-20, 19] in unix-tradition so callers can't pin the scheduler at
+// MAX_INT. Returns the previous priority on success.
+uint64
+sys_setprio(void)
+{
+  int prio, prev;
+  struct proc *p = myproc();
+  argint(0, &prio);
+  if (prio < -20) prio = -20;
+  if (prio > 19)  prio = 19;
+  prev = p->priority;
+  p->priority = prio;
+  return prev;
+}
+
 uint64
 sys_proxylock(void)
 {

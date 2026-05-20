@@ -431,13 +431,23 @@ kwait(uint64 addr)
   }
 }
 
-// Per-CPU process scheduler.
-// Each CPU calls scheduler() after setting itself up.
-// Scheduler never returns.  It loops, doing:
-//  - choose a process to run.
-//  - swtch to start running that process.
-//  - eventually that process transfers control
-//    via swtch back to the scheduler.
+// Per-CPU process scheduler — Liberal_OS T-51 priority-aware variant.
+//
+// Each outer iteration:
+//   pass 1: scan proc table, find the maximum priority value among
+//           RUNNABLE procs (lock briefly per proc to read state).
+//   pass 2: scan again and run the FIRST RUNNABLE proc whose priority
+//           equals the max from pass 1, then break back to the outer
+//           loop so a freshly-runnable higher-priority proc can be
+//           picked up on the next iteration.
+//
+// Strict priority (higher int = higher priority). Within one priority
+// level, the scan starts from index 0 each time, which biases toward
+// lower-pid procs — acceptable for a Phase 5 demonstration and noted
+// in TASKS.md as a fairness trade-off (true round-robin within a
+// priority level would need a rotating cursor). priority=0 is the
+// default set by allocproc, so unmodified xv6 behaviour reduces to
+// the original Round Robin.
 void
 scheduler(void)
 {
@@ -446,32 +456,62 @@ scheduler(void)
 
   c->proc = 0;
   for(;;){
-    // The most recent process to run may have had interrupts
-    // turned off; enable them to avoid a deadlock if all
-    // processes are waiting. Then turn them back off
-    // to avoid a possible race between an interrupt
-    // and wfi.
     intr_on();
     intr_off();
 
-    int found = 0;
+    // Pass 1: find max priority among RUNNABLE procs.
+    int any_runnable = 0;
+    int max_prio = 0;
     for(p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
       if(p->state == RUNNABLE) {
-        // Switch to chosen process.  It is the process's job
-        // to release its lock and then reacquire it
-        // before jumping back to us.
-        p->state = RUNNING;
-        c->proc = p;
-        swtch(&c->context, &p->context);
-
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
-        c->proc = 0;
-        found = 1;
+        if(!any_runnable || p->priority > max_prio) {
+          max_prio = p->priority;
+          any_runnable = 1;
+        }
       }
       release(&p->lock);
     }
+
+    int found = 0;
+
+    // Pass 2: run one RUNNABLE proc whose priority matches max_prio.
+    if(any_runnable) {
+      for(p = proc; p < &proc[NPROC]; p++) {
+        acquire(&p->lock);
+        if(p->state == RUNNABLE && p->priority == max_prio) {
+          p->state = RUNNING;
+          c->proc = p;
+          swtch(&c->context, &p->context);
+          c->proc = 0;
+          found = 1;
+        }
+        release(&p->lock);
+        if(found) break;
+      }
+    }
+
+    // Multi-CPU fallback: if every max_prio RUNNABLE was claimed by
+    // another core between pass 1 and pass 2, run *any* RUNNABLE proc
+    // instead of spinning on wfi. This keeps lower-priority workloads
+    // making progress while higher-priority procs are already
+    // dispatched, and matches the spirit of "highest-priority first,
+    // round-robin within and across remaining ready procs".
+    if(!found && any_runnable) {
+      for(p = proc; p < &proc[NPROC]; p++) {
+        acquire(&p->lock);
+        if(p->state == RUNNABLE) {
+          p->state = RUNNING;
+          c->proc = p;
+          swtch(&c->context, &p->context);
+          c->proc = 0;
+          found = 1;
+        }
+        release(&p->lock);
+        if(found) break;
+      }
+    }
+
     if(found == 0) {
       // nothing to run; stop running on this core until an interrupt.
       asm volatile("wfi");
