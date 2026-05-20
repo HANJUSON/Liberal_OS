@@ -23,3 +23,5 @@
 // Liberal_OS agent syscalls.
 #define SYS_setrole  22
 #define SYS_agentstat 23
+#define SYS_proxylock   24
+#define SYS_proxyunlock 25

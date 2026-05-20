@@ -1,0 +1,5 @@
+ERROR: disk full at /var/log
+WARN: high cpu usage 95%
+INFO: process started pid=1234
+ERROR: connection refused 5432
+CRITICAL: out of memory

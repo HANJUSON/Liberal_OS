@@ -26,6 +26,8 @@ int pause(int);
 int uptime(void);
 int setrole(const char*);
 int agentstat(void);
+int proxylock(void);
+int proxyunlock(void);
 
 // ulib.c
 int stat(const char*, struct stat*);

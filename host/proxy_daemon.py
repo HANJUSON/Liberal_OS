@@ -11,8 +11,13 @@ Phase 2 milestone, three modes:
 
 Frame format on the xv6 console serial (matches user/proxy_client.h):
 
-    PROXY_REQ\\t<role>\\t<prompt>\\n     (xv6 → host)
-    PROXY_RES\\t<result>\\n              (host → xv6)
+    PROXY_REQ\\t<id>\\t<role>\\t<prompt>\\n     (xv6 → host)
+    PROXY_RES\\t<id>\\t<result>\\n              (host → xv6)
+
+The <id> field — currently the caller's pid — is opaque to the host
+beyond round-tripping it back unchanged; it lets multiple sibling
+agents in a pipe chain share the console without grabbing each other's
+responses.
 
 Self-test (``--self-test``) spawns xv6, drives ``proxytest <role>
 <prompt>``, services the resulting PROXY_REQ, and waits for the guest
@@ -147,18 +152,18 @@ def _drive_proxytest(ch: Xv6Channel, mode: str, role: str, prompt: str,
             text = bytes(line).decode("utf-8", "replace")
             line.clear()
             if text.startswith(PROXY_REQ_TAG + "\t"):
-                parts = text.split("\t", 2)
-                if len(parts) != 3:
+                parts = text.split("\t", 3)
+                if len(parts) != 4:
                     continue
-                _, got_role, got_prompt = parts
+                _, req_id, got_role, got_prompt = parts
                 try:
                     reply = handler(got_role, got_prompt)
-                    ch.send(f"{PROXY_RES_TAG}\t{reply}\n")
+                    ch.send(f"{PROXY_RES_TAG}\t{req_id}\t{reply}\n")
                     served += 1
                 except Exception as exc:  # noqa: BLE001
                     last_error = f"{type(exc).__name__}: {exc}"
                     # Send a sentinel so the guest doesn't hang waiting.
-                    ch.send(f"{PROXY_RES_TAG}\t__HANDLER_ERROR__\n")
+                    ch.send(f"{PROXY_RES_TAG}\t{req_id}\t__HANDLER_ERROR__\n")
             elif "PROXY_TEST_OK" in text:
                 return {
                     "ok": True,
@@ -195,12 +200,95 @@ def _drive_proxytest(ch: Xv6Channel, mode: str, role: str, prompt: str,
     }
 
 
+def _drive_triage(ch: Xv6Channel, mode: str, input_file: str,
+                  timeout_s: float) -> dict[str, object]:
+    """Run `triage <input_file>` in xv6 and service every PROXY_REQ until
+    the evaluator emits TRIAGE_DONE (or we time out)."""
+    started = time.monotonic()
+    handler = HANDLERS[mode]
+
+    ch.send(f"triage {input_file}\n")
+
+    deadline = time.monotonic() + timeout_s
+    line = bytearray()
+    served_by_role: dict[str, int] = {}
+    evaluator_outputs: list[str] = []
+    last_error: Optional[str] = None
+
+    while time.monotonic() < deadline:
+        try:
+            chunk = os.read(ch.proc.stdout.fileno(), 4096)
+        except BlockingIOError:
+            chunk = b""
+        if not chunk:
+            time.sleep(0.02)
+            continue
+        for byte in chunk:
+            if byte != 0x0A:
+                line.append(byte)
+                continue
+            text = bytes(line).decode("utf-8", "replace")
+            line.clear()
+            if text.startswith(PROXY_REQ_TAG + "\t"):
+                parts = text.split("\t", 3)
+                if len(parts) != 4:
+                    continue
+                _, req_id, role, prompt = parts
+                try:
+                    reply = handler(role, prompt)
+                    ch.send(f"{PROXY_RES_TAG}\t{req_id}\t{reply}\n")
+                    served_by_role[role] = served_by_role.get(role, 0) + 1
+                except Exception as exc:  # noqa: BLE001
+                    last_error = f"{type(exc).__name__}: {exc}"
+                    ch.send(f"{PROXY_RES_TAG}\t{req_id}\t__HANDLER_ERROR__\n")
+            elif text.startswith("evaluator:"):
+                evaluator_outputs.append(text)
+            elif text == "TRIAGE_DONE":
+                roles_seen = sorted(served_by_role)
+                expected = ["classifier", "evaluator", "fixsuggest", "parser", "rootcause"]
+                ok = roles_seen == expected and len(evaluator_outputs) > 0
+                return {
+                    "ok": ok,
+                    "mode": mode,
+                    "served": served_by_role,
+                    "evaluator_lines": len(evaluator_outputs),
+                    "evaluator_sample": evaluator_outputs[:3],
+                    "missing_roles": [r for r in expected if r not in served_by_role],
+                    "elapsed_s": round(time.monotonic() - started, 3),
+                }
+
+    return {
+        "ok": False,
+        "mode": mode,
+        "served": served_by_role,
+        "evaluator_lines": len(evaluator_outputs),
+        "reason": "timeout",
+        "last_error": last_error,
+        "elapsed_s": round(time.monotonic() - started, 3),
+    }
+
+
 def run_self_test(mode: str, role: str, prompt: str, timeout_s: float) -> int:
     _load_dotenv_if_present()
     ch = Xv6Channel()
     try:
         ch.wait_for(b"init: starting sh", timeout=15.0)
+        # Give sh a beat to install its console handlers before stuffing input.
+        time.sleep(0.2)
         result = _drive_proxytest(ch, mode, role, prompt, timeout_s)
+        print(json.dumps(result, ensure_ascii=False))
+        return 0 if result.get("ok") else 1
+    finally:
+        ch.close()
+
+
+def run_triage(mode: str, input_file: str, timeout_s: float) -> int:
+    _load_dotenv_if_present()
+    ch = Xv6Channel()
+    try:
+        ch.wait_for(b"init: starting sh", timeout=15.0)
+        time.sleep(0.2)
+        result = _drive_triage(ch, mode, input_file, timeout_s)
         print(json.dumps(result, ensure_ascii=False))
         return 0 if result.get("ok") else 1
     finally:
@@ -215,10 +303,13 @@ def main() -> int:
     ap.add_argument("--timeout", type=float, default=20.0)
     ap.add_argument("--self-test", action="store_true",
                     help="spawn xv6, drive proxytest, verify the round trip")
+    ap.add_argument("--triage", metavar="INPUT",
+                    help="spawn xv6, run `triage <INPUT>`, service the 5-stage pipeline")
     args = ap.parse_args()
 
-    if args.self_test or True:
-        return run_self_test(args.mode, args.role, args.prompt, args.timeout)
+    if args.triage:
+        return run_triage(args.mode, args.triage, args.timeout)
+    return run_self_test(args.mode, args.role, args.prompt, args.timeout)
 
 
 if __name__ == "__main__":

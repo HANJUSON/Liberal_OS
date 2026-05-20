@@ -44,3 +44,5 @@ entry("pause");
 entry("uptime");
 entry("setrole");
 entry("agentstat");
+entry("proxylock");
+entry("proxyunlock");

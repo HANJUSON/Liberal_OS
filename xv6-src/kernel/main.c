@@ -28,6 +28,7 @@ main()
     iinit();         // inode table
     fileinit();      // file table
     virtio_disk_init(); // emulated hard disk
+    proxyinit();     // Liberal_OS proxy sleeplock
     userinit();      // first user process
     AGENT_LOG("info", "kernel ready");
     __sync_synchronize();

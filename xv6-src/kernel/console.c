@@ -44,7 +44,7 @@ consputc(int c)
 
 struct {
   struct spinlock lock;
-  
+
   // input circular buffer
 #define INPUT_BUF_SIZE 128
   char buf[INPUT_BUF_SIZE];
@@ -53,6 +53,16 @@ struct {
   uint e;  // Edit index
 } cons;
 
+// Liberal_OS T-30+: serialize user-mode console writes so that one
+// process's write() cannot be interleaved with another's at byte
+// granularity. uartwrite already takes tx_lock per byte, but its
+// internal sleep releases that lock — without this outer sleeplock,
+// two sibling agents in a pipeline can shred each other's PROXY_REQ
+// frames at the UART. printf still bypasses this (it uses
+// uartputc_sync, not uartwrite), but that's tolerable now that
+// setrole no longer logs.
+static struct sleeplock cons_write_lock;
+
 //
 // user write() system calls to the console go here.
 // uses sleep() and UART interrupts.
@@ -60,9 +70,13 @@ struct {
 int
 consolewrite(int user_src, uint64 src, int n)
 {
-  char buf[32]; // move batches from user space to uart.
+  // 1024-byte staging buffer paired with the cons_write_lock sleeplock
+  // keeps each whole user write() atomic at the UART — see the comment
+  // on cons_write_lock above.
+  char buf[1024];
   int i = 0;
 
+  acquiresleep(&cons_write_lock);
   while(i < n){
     int nn = sizeof(buf);
     if(nn > n - i)
@@ -72,6 +86,7 @@ consolewrite(int user_src, uint64 src, int n)
     uartwrite(buf, nn);
     i += nn;
   }
+  releasesleep(&cons_write_lock);
 
   return i;
 }
@@ -165,8 +180,12 @@ consoleintr(int c)
     if(c != 0 && cons.e-cons.r < INPUT_BUF_SIZE){
       c = (c == '\r') ? '\n' : c;
 
-      // echo back to the user.
-      consputc(c);
+      // Liberal_OS T-30+: input echo intentionally disabled. Echoing
+      // every keystroke mixed host-side PROXY_RES bytes back into the
+      // UART output stream and corrupted concurrent agent writes.
+      // The trade-off is interactive shell users no longer see what
+      // they type — acceptable for an automation-first harness.
+      //   consputc(c);
 
       // store for consumption by consoleread().
       cons.buf[cons.e++ % INPUT_BUF_SIZE] = c;
@@ -188,6 +207,7 @@ void
 consoleinit(void)
 {
   initlock(&cons.lock, "cons");
+  initsleeplock(&cons_write_lock, "cons_write");
 
   uartinit();
 

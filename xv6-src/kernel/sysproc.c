@@ -5,7 +5,21 @@
 #include "memlayout.h"
 #include "spinlock.h"
 #include "proc.h"
+#include "sleeplock.h"
 #include "vm.h"
+
+// Liberal_OS T-30+: a single kernel-side sleeplock serializing
+// proxy_call sequences. With multiple agent procs sharing /console
+// for the proxy channel, only one may have an outstanding PROXY_REQ
+// at a time; otherwise sibling readers race on consoleread() and
+// steal each other's PROXY_RES bytes. Initialized once from main().
+struct sleeplock proxy_lock;
+
+void
+proxyinit(void)
+{
+  initsleeplock(&proxy_lock, "proxy");
+}
 
 uint64
 sys_exit(void)
@@ -112,7 +126,12 @@ sys_setrole(void)
     return -1;
 
   safestrcpy(p->agent_role, buf, sizeof(p->agent_role));
-  AGENT_LOG("info", "setrole pid=%d role=%s", p->pid, p->agent_role);
+  // T-21 originally emitted an AGENT_LOG here for observability, but
+  // multi-process pipelines (T-30+) showed that kernel printfs can
+  // interleave with concurrent user writes at byte granularity on the
+  // shared console UART, corrupting PROXY_REQ frames. Until the UART
+  // driver acquires a per-write lock, agent-role transitions are
+  // observable via agentstat(2) instead of inline logs.
   return 0;
 }
 
@@ -151,6 +170,21 @@ sys_agentstat(void)
            p->pid, p->name, p->agent_role, p->priority, st);
   }
   printf("]\n");
+  return 0;
+}
+
+uint64
+sys_proxylock(void)
+{
+  acquiresleep(&proxy_lock);
+  return 0;
+}
+
+uint64
+sys_proxyunlock(void)
+{
+  if (holdingsleep(&proxy_lock))
+    releasesleep(&proxy_lock);
   return 0;
 }
 

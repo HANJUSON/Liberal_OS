@@ -150,9 +150,17 @@ UPROGS=\
 	$U/_setrole\
 	$U/_agentstat\
 	$U/_proxytest\
+	$U/_parser\
+	$U/_classifier\
+	$U/_rootcause\
+	$U/_fixsuggest\
+	$U/_evaluator\
+	$U/_triage\
 
-fs.img: mkfs/mkfs README $(UPROGS)
-	mkfs/mkfs fs.img README $(UPROGS)
+fs.img: mkfs/mkfs README $(UPROGS) ../samples/short.log
+	@cp ../samples/short.log _short.log
+	mkfs/mkfs fs.img README _short.log $(UPROGS)
+	@rm -f _short.log
 
 -include kernel/*.d user/*.d
 
