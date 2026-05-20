@@ -124,7 +124,7 @@
 - **estimate**: 1시간
 - **assignee**: kernel
 
-### T-22 `[ ]` `agentstat` 시스템 콜 + 유저 프로그램
+### T-22 `[~]` `agentstat` 시스템 콜 + 유저 프로그램
 - **depends**: T-21
 - **files**: 위와 동일 + `xv6-src/user/agentstat.c`
 - **verify**: xv6 셸에서 `agentstat` 실행 시 모든 active proc의 정보를 JSON 1줄로 출력
