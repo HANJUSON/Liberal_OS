@@ -59,7 +59,7 @@
 - **estimate**: 30분
 - **assignee**: agent
 
-### T-05 `[~]` `tests/autotest.sh` 골격
+### T-05 `[x]` `tests/autotest.sh` 골격
 - **depends**: T-03
 - **files**: `tests/autotest.sh`, `tests/inputs/smoke.in`, `Makefile`
 - **verify**: `make autotest` 실행 → 60초 이내 `PASS` 또는 `FAIL` 출력
@@ -338,5 +338,5 @@
 
 ## 마지막 갱신
 
-2026-05-20 — T-03 blocker 해소, Phase 1 절반 완료 ([x]: T-01/02/03/04/08).
-다음 진행 후보: T-06 → T-05 → T-07 → T-09 → T-10.
+2026-05-20 — Phase 1 ~70% 완료 ([x]: T-01/02/03/04/05/06/08).
+다음 진행 후보: T-07 → T-09 → T-10.
