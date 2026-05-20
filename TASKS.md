@@ -139,28 +139,28 @@
 - **assignee**: agent
 - **note**: 가장 까다로운 작업. virtio가 안 되면 `-chardev pipe`로 fallback
 
-### T-24 xv6 측 proxy client 유저 라이브러리
+### T-24 `[~]` xv6 측 proxy client 유저 라이브러리
 - **depends**: T-23
 - **files**: `xv6-src/user/proxy_client.c`, `xv6-src/user/proxy_client.h`
 - **verify**: xv6 유저 프로그램에서 `proxy_call("echo", "hello")` → 호스트 echo 응답 받음
 - **estimate**: 2시간
 - **assignee**: agent
 
-### T-25 host proxy daemon mock 모드
+### T-25 `[~]` host proxy daemon mock 모드
 - **depends**: T-23
 - **files**: `host/proxy_daemon.py`
 - **verify**: `MODE=mock python host/proxy_daemon.py` 후 xv6에서 LLM 요청 시 더미 응답 받음
 - **estimate**: 1시간
 - **assignee**: agent
 
-### T-26 host proxy daemon live 모드 (Upstage 통합)
+### T-26 `[ ]` host proxy daemon live 모드 (Upstage 통합)
 - **depends**: T-25, T-04
 - **files**: `host/proxy_daemon.py`
 - **verify**: `MODE=live`로 xv6에서 짧은 LLM 요청 → solar-pro 응답
 - **estimate**: 1시간
 - **assignee**: agent
 
-### T-27 LLM 응답 캐시 (replay 모드)
+### T-27 `[ ]` LLM 응답 캐시 (replay 모드)
 - **depends**: T-26
 - **files**: `host/proxy_daemon.py`, `.cache/llm/`
 - **verify**: 동일 입력 두 번 호출 시 두 번째는 캐시 사용 (timestamp 비교로 확인)
