@@ -22,6 +22,8 @@ from typing import Any
 def _collect(path: pathlib.Path) -> dict[str, list[float]]:
     grouped: dict[str, list[float]] = {}
     for jf in sorted(path.rglob("*.json")):
+        if jf.name == "summary.json":
+            continue   # don't fold yesterday's summary back into today's
         try:
             data = json.loads(jf.read_text())
         except json.JSONDecodeError as exc:

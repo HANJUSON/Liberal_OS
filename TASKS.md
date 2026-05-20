@@ -271,14 +271,14 @@
 
 ## Phase 6 — 평가 (Week 13)
 
-### T-60 `[~]` `bench/run_all.sh` 완성
+### T-60 `[x]` `bench/run_all.sh` 완성
 - **depends**: T-36, T-41, T-52
 - **files**: `bench/run_all.sh`
 - **verify**: 5개 실험 5회 반복 후 `out/bench/*.json` 생성
 - **estimate**: 2시간
 - **assignee**: bench
 
-### T-61 `[~]` `bench/report.py` — REPORT.md 자동 생성
+### T-61 `[x]` `bench/report.py` — REPORT.md 자동 생성
 - **depends**: T-60
 - **files**: `bench/report.py`
 - **verify**: `python bench/report.py out/bench/ > out/REPORT.md` → 표 + 통계 포함된 마크다운
@@ -338,8 +338,8 @@
 
 ## 마지막 갱신
 
-2026-05-20 — Phase 1 + Phase 2 + Phase 3 완료
-  [x] T-01~T-10, T-20~T-27, T-30~T-36.
-  end-to-end mock 0.97초 PASS.
-  다음 단계: Phase 4 (Evaluator 재시도 루프 — T-40, T-41)
-  또는 Phase 5 (스케줄러 수정 — HUMAN GATE).
+2026-05-20 — Phase 1+2+3+6(부분) 완료
+  [x] T-01~T-10, T-20~T-27, T-30~T-36, T-60, T-61.
+  e2e mock 5회 평균 0.98±0.03초.
+  남은 작업: Phase 4 (T-40/41 Evaluator 재시도), Phase 5 (T-50~52, HUMAN GATE),
+            Phase 6 (T-62 실 벤치 — 사람만), Phase 7 (T-70~73, 보고서/슬라이드).
