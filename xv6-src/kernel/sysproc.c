@@ -116,6 +116,44 @@ sys_setrole(void)
   return 0;
 }
 
+// Liberal_OS T-22: dump a one-line JSON snapshot of every active proc.
+// Output goes straight to the console via printf (which xv6 routes to
+// both serial and the calling proc's stdout when run from a shell).
+// Locking note: matches procdump's no-lock walk — caller is expected
+// to be running interactively, racing readers tolerate slight skew.
+uint64
+sys_agentstat(void)
+{
+  static char *states[] = {
+    [UNUSED]   "unused",
+    [USED]     "used",
+    [SLEEPING] "sleep",
+    [RUNNABLE] "runble",
+    [RUNNING]  "run",
+    [ZOMBIE]   "zombie",
+  };
+  struct proc *p;
+  int first = 1;
+  char *st;
+
+  printf("[");
+  for(p = proc; p < &proc[NPROC]; p++){
+    if(p->state == UNUSED)
+      continue;
+    if(p->state >= 0 && p->state < NELEM(states) && states[p->state])
+      st = states[p->state];
+    else
+      st = "?";
+    if(!first)
+      printf(",");
+    first = 0;
+    printf("{\"pid\":%d,\"name\":\"%s\",\"role\":\"%s\",\"prio\":%d,\"st\":\"%s\"}",
+           p->pid, p->name, p->agent_role, p->priority, st);
+  }
+  printf("]\n");
+  return 0;
+}
+
 // return how many clock tick interrupts have occurred
 // since start.
 uint64

@@ -124,7 +124,7 @@
 - **estimate**: 1시간
 - **assignee**: kernel
 
-### T-22 `[~]` `agentstat` 시스템 콜 + 유저 프로그램
+### T-22 `[x]` `agentstat` 시스템 콜 + 유저 프로그램
 - **depends**: T-21
 - **files**: 위와 동일 + `xv6-src/user/agentstat.c`
 - **verify**: xv6 셸에서 `agentstat` 실행 시 모든 active proc의 정보를 JSON 1줄로 출력
@@ -338,5 +338,6 @@
 
 ## 마지막 갱신
 
-2026-05-20 — Phase 1 완료 ([x]: T-01~T-10).
-다음 단계: Phase 2 (T-20 proc 확장 등).
+2026-05-20 — Phase 1 완료 + Phase 2 부분 진행
+  [x] T-01~T-10, T-20, T-21, T-22.
+  다음 후보: T-23 (virtio serial — 까다로움), T-24, T-25.

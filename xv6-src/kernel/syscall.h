@@ -22,3 +22,4 @@
 #define SYS_close  21
 // Liberal_OS agent syscalls.
 #define SYS_setrole  22
+#define SYS_agentstat 23
