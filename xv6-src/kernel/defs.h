@@ -9,6 +9,10 @@ struct sleeplock;
 struct stat;
 struct superblock;
 
+// Kernel-wide convenience macro for agent telemetry. Definition lives in
+// agent_log.h; included here so any .c that pulls in defs.h gets it.
+#include "agent_log.h"
+
 // bio.c
 void            binit(void);
 struct buf*     bread(uint, uint);

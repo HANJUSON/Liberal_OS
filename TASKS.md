@@ -96,7 +96,7 @@
 - **estimate**: 1시간
 - **assignee**: kernel
 
-### T-10 `[~]` `AGENT_LOG` 매크로 도입
+### T-10 `[x]` `AGENT_LOG` 매크로 도입
 - **depends**: T-09
 - **files**: `xv6-src/kernel/agent_log.h`, `xv6-src/kernel/defs.h`
 - **verify**: 커널에서 `AGENT_LOG("info", "test %d", 42)` 호출 시 `[AGENT][info][...]` 출력
@@ -338,5 +338,5 @@
 
 ## 마지막 갱신
 
-2026-05-20 — Phase 1 ~70% 완료 ([x]: T-01/02/03/04/05/06/08).
-다음 진행 후보: T-07 → T-09 → T-10.
+2026-05-20 — Phase 1 완료 ([x]: T-01~T-10).
+다음 단계: Phase 2 (T-20 proc 확장 등).
