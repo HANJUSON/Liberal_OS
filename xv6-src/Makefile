@@ -149,6 +149,7 @@ UPROGS=\
 	$U/_procfields\
 	$U/_setrole\
 	$U/_agentstat\
+	$U/_proxytest\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)

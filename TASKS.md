@@ -139,14 +139,14 @@
 - **assignee**: agent
 - **note**: 가장 까다로운 작업. virtio가 안 되면 `-chardev pipe`로 fallback
 
-### T-24 `[~]` xv6 측 proxy client 유저 라이브러리
+### T-24 `[x]` xv6 측 proxy client 유저 라이브러리
 - **depends**: T-23
 - **files**: `xv6-src/user/proxy_client.c`, `xv6-src/user/proxy_client.h`
 - **verify**: xv6 유저 프로그램에서 `proxy_call("echo", "hello")` → 호스트 echo 응답 받음
 - **estimate**: 2시간
 - **assignee**: agent
 
-### T-25 `[~]` host proxy daemon mock 모드
+### T-25 `[x]` host proxy daemon mock 모드
 - **depends**: T-23
 - **files**: `host/proxy_daemon.py`
 - **verify**: `MODE=mock python host/proxy_daemon.py` 후 xv6에서 LLM 요청 시 더미 응답 받음
