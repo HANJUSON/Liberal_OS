@@ -173,49 +173,49 @@
 
 > 목표: 5종 에이전트가 xv6 안에서 pipe로 연결되어 동작.
 
-### T-30 parser 에이전트 (xv6 유저 프로그램)
+### T-30 `[~]` parser 에이전트 (xv6 유저 프로그램)
 - **depends**: T-22, T-24
 - **files**: `xv6-src/user/agent_parser.c`
 - **verify**: 표준입력으로 로그 라인 받아 proxy_call 후 구조화된 출력
 - **estimate**: 2시간
 - **assignee**: agent
 
-### T-31 classifier 에이전트
+### T-31 `[ ]` classifier 에이전트
 - **depends**: T-30
 - **files**: `xv6-src/user/agent_classifier.c`
 - **verify**: parser 출력 → 분류 결과 (INFO/WARN/ERROR/CRITICAL) 출력
 - **estimate**: 1.5시간
 - **assignee**: agent
 
-### T-32 root-cause 에이전트
+### T-32 `[ ]` root-cause 에이전트
 - **depends**: T-31
 - **files**: `xv6-src/user/agent_rootcause.c`
 - **verify**: ERROR/CRITICAL 입력만 처리, 그 외는 패스스루
 - **estimate**: 1.5시간
 - **assignee**: agent
 
-### T-33 fix-suggester 에이전트
+### T-33 `[ ]` fix-suggester 에이전트
 - **depends**: T-32
 - **files**: `xv6-src/user/agent_fixsuggest.c`
 - **verify**: root-cause 출력 받아 수정 제안 생성
 - **estimate**: 1.5시간
 - **assignee**: agent
 
-### T-34 evaluator 에이전트
+### T-34 `[ ]` evaluator 에이전트
 - **depends**: T-33
 - **files**: `xv6-src/user/agent_evaluator.c`
 - **verify**: 각 단계 출력을 검증 후 통과/재시도 신호 출력
 - **estimate**: 3시간
 - **assignee**: agent
 
-### T-35 orchestrator (triage 명령)
+### T-35 `[ ]` orchestrator (triage 명령)
 - **depends**: T-30, T-31, T-32, T-33, T-34
 - **files**: `xv6-src/user/triage.c`
 - **verify**: `triage samples/short.log` 실행 시 5개 에이전트 fork + pipe 연결 + 결과 출력
 - **estimate**: 2시간
 - **assignee**: agent
 
-### T-36 첫 end-to-end mock 통과
+### T-36 `[ ]` 첫 end-to-end mock 통과
 - **depends**: T-35
 - **files**: `tests/e2e_mock.sh`
 - **verify**: `MODE=mock make e2e` 통과
