@@ -67,7 +67,7 @@
 - **assignee**: harness
 - **note**: 헤드리스 QEMU + serial 캡처 + grep 판정. xv6 안에 `smoketest` 유저 프로그램 추가 필요
 
-### T-06 `[ ]` xv6 user `smoketest.c` 추가
+### T-06 `[~]` xv6 user `smoketest.c` 추가
 - **depends**: T-03
 - **files**: `xv6-src/user/smoketest.c`, `xv6-src/Makefile`
 - **verify**: xv6 셸에서 `smoketest` 실행 → `SMOKE_TEST_PASS` 출력
