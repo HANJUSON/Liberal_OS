@@ -109,7 +109,7 @@
 
 > 목표: 에이전트 메타데이터를 xv6 proc에 박고, 호스트와 통신하는 채널 확보.
 
-### T-20 proc 구조체 확장
+### T-20 `[~]` proc 구조체 확장
 - **depends**: T-06, T-10
 - **files**: `xv6-src/kernel/proc.h`, `xv6-src/kernel/proc.c`
 - **verify**: fork 후 자식 proc의 `agent_role`, `priority` 필드가 부모로부터 상속됨 (테스트: `xv6-src/user/test_proc_fields.c`)
@@ -117,14 +117,14 @@
 - **assignee**: kernel
 - **note**: 기본값은 `agent_role = "none"`, `priority = 0`
 
-### T-21 `setrole` 시스템 콜 추가
+### T-21 `[ ]` `setrole` 시스템 콜 추가
 - **depends**: T-20
 - **files**: `xv6-src/kernel/syscall.c`, `xv6-src/kernel/syscall.h`, `xv6-src/kernel/sysproc.c`, `xv6-src/user/user.h`, `xv6-src/user/usys.pl`
 - **verify**: 유저 프로그램에서 `setrole("parser")` 호출 후 `agentstat`에 반영됨
 - **estimate**: 1시간
 - **assignee**: kernel
 
-### T-22 `agentstat` 시스템 콜 + 유저 프로그램
+### T-22 `[ ]` `agentstat` 시스템 콜 + 유저 프로그램
 - **depends**: T-21
 - **files**: 위와 동일 + `xv6-src/user/agentstat.c`
 - **verify**: xv6 셸에서 `agentstat` 실행 시 모든 active proc의 정보를 JSON 1줄로 출력
