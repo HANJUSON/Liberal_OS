@@ -226,14 +226,14 @@
 
 ## Phase 4 — Evaluator 재시도 루프 (Week 12 중반)
 
-### T-40 `kill` + `sleep/wakeup`로 재시도 신호
+### T-40 `[~]` `kill` + `sleep/wakeup`로 재시도 신호
 - **depends**: T-34, T-35
 - **files**: `xv6-src/kernel/proc.c` (필요 시 sleep/wakeup 확장), `xv6-src/user/agent_evaluator.c`
 - **verify**: Evaluator가 worker에게 retry 신호 보내면 worker가 재실행
 - **estimate**: 4시간
 - **assignee**: kernel + agent (협업)
 
-### T-41 재시도 카운터 + 최대 3회 제한
+### T-41 `[~]` 재시도 카운터 + 최대 3회 제한
 - **depends**: T-40
 - **files**: `xv6-src/user/agent_evaluator.c`
 - **verify**: 일부러 검증 실패하는 mock 응답으로 정확히 3회 재시도 후 실패 보고
