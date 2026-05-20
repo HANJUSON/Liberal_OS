@@ -226,14 +226,14 @@
 
 ## Phase 4 — Evaluator 재시도 루프 (Week 12 중반)
 
-### T-40 `[~]` `kill` + `sleep/wakeup`로 재시도 신호
+### T-40 `[x]` `kill` + `sleep/wakeup`로 재시도 신호
 - **depends**: T-34, T-35
 - **files**: `xv6-src/kernel/proc.c` (필요 시 sleep/wakeup 확장), `xv6-src/user/agent_evaluator.c`
 - **verify**: Evaluator가 worker에게 retry 신호 보내면 worker가 재실행
 - **estimate**: 4시간
 - **assignee**: kernel + agent (협업)
 
-### T-41 `[~]` 재시도 카운터 + 최대 3회 제한
+### T-41 `[x]` 재시도 카운터 + 최대 3회 제한
 - **depends**: T-40
 - **files**: `xv6-src/user/agent_evaluator.c`
 - **verify**: 일부러 검증 실패하는 mock 응답으로 정확히 3회 재시도 후 실패 보고
@@ -338,8 +338,7 @@
 
 ## 마지막 갱신
 
-2026-05-20 — Phase 1+2+3+5+6(부분) 완료
-  [x] T-01~T-10, T-20~T-27, T-30~T-36, T-50~T-52, T-60, T-61.
-  e2e mock 5회 평균 0.98±0.03초; priority scheduler 검증.
-  남은 작업: Phase 4 (T-40/41 Evaluator 재시도 — 옵션 A),
-            Phase 6 (T-62 실 벤치), Phase 7 (T-70~73, 보고서/슬라이드).
+2026-05-20 — Phase 1+2+3+4+5+6(부분) 완료
+  [x] T-01~T-10, T-20~T-27, T-30~T-36, T-40, T-41, T-50~T-52, T-60, T-61.
+  e2e mock + retry: 6 retries, 2 FAIL, 3 OK / 5 lines; priority scheduler 검증.
+  남은 작업: Phase 6 (T-62 실 벤치), Phase 7 (T-70~73, 보고서/슬라이드/데모).

@@ -214,6 +214,9 @@ def _drive_triage(ch: Xv6Channel, mode: str, input_file: str,
     served_by_role: dict[str, int] = {}
     evaluator_outputs: list[str] = []
     last_error: Optional[str] = None
+    eval_retries = 0
+    eval_fails = 0
+    eval_oks = 0
 
     while time.monotonic() < deadline:
         try:
@@ -241,6 +244,14 @@ def _drive_triage(ch: Xv6Channel, mode: str, input_file: str,
                 except Exception as exc:  # noqa: BLE001
                     last_error = f"{type(exc).__name__}: {exc}"
                     ch.send(f"{PROXY_RES_TAG}\t{req_id}\t__HANDLER_ERROR__\n")
+            elif text.startswith("EVAL_RETRY"):
+                eval_retries += 1
+            elif text.startswith("evaluator:FAIL:"):
+                eval_fails += 1
+                evaluator_outputs.append(text)
+            elif text.startswith("evaluator:OK:"):
+                eval_oks += 1
+                evaluator_outputs.append(text)
             elif text.startswith("evaluator:"):
                 evaluator_outputs.append(text)
             elif text == "TRIAGE_DONE":
@@ -253,6 +264,9 @@ def _drive_triage(ch: Xv6Channel, mode: str, input_file: str,
                     "served": served_by_role,
                     "evaluator_lines": len(evaluator_outputs),
                     "evaluator_sample": evaluator_outputs[:3],
+                    "eval_retries": eval_retries,
+                    "eval_fails": eval_fails,
+                    "eval_oks": eval_oks,
                     "missing_roles": [r for r in expected if r not in served_by_role],
                     "elapsed_s": round(time.monotonic() - started, 3),
                 }
