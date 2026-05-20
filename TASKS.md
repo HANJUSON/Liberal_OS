@@ -59,7 +59,7 @@
 - **estimate**: 30분
 - **assignee**: agent
 
-### T-05 `[ ]` `tests/autotest.sh` 골격
+### T-05 `[~]` `tests/autotest.sh` 골격
 - **depends**: T-03
 - **files**: `tests/autotest.sh`, `tests/inputs/smoke.in`, `Makefile`
 - **verify**: `make autotest` 실행 → 60초 이내 `PASS` 또는 `FAIL` 출력
