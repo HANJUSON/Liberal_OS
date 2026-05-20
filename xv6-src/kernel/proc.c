@@ -125,6 +125,12 @@ found:
   p->pid = allocpid();
   p->state = USED;
 
+  // Liberal_OS: default agent metadata. fork() overwrites these from
+  // the parent; userinit's initproc and any unparented proc see "none".
+  safestrcpy(p->agent_role, "none", sizeof(p->agent_role));
+  p->priority = 0;
+  p->agent_state = 0;
+
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
     freeproc(p);
@@ -168,6 +174,11 @@ freeproc(struct proc *p)
   p->chan = 0;
   p->killed = 0;
   p->xstate = 0;
+  // Reset agent metadata so reused slots don't leak the previous tenant's
+  // role/priority through allocproc's defaults.
+  p->agent_role[0] = 0;
+  p->priority = 0;
+  p->agent_state = 0;
   p->state = UNUSED;
 }
 
@@ -289,6 +300,12 @@ kfork(void)
   np->cwd = idup(p->cwd);
 
   safestrcpy(np->name, p->name, sizeof(p->name));
+
+  // Liberal_OS: inherit agent metadata so a forked worker keeps the
+  // parent's role/priority unless the child later setrole()s itself.
+  safestrcpy(np->agent_role, p->agent_role, sizeof(np->agent_role));
+  np->priority = p->priority;
+  np->agent_state = p->agent_state;
 
   pid = np->pid;
 

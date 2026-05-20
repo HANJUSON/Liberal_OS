@@ -104,6 +104,13 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+
+  // Liberal_OS agent metadata. Inherited from parent at fork; defaults to
+  // role="none", priority=0, agent_state=0 in allocproc. Set explicitly
+  // via the setrole syscall (T-21). Read back via agentstat (T-22).
+  char agent_role[16];         // "none" or one of parser/classifier/...
+  int  priority;               // scheduler hint (0 = default)
+  int  agent_state;            // free-form lifecycle marker used by Phase 3+
 };
 
 // Global proc table. Defined in proc.c. Exposed here so that the panic

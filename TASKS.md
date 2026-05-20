@@ -109,7 +109,7 @@
 
 > 목표: 에이전트 메타데이터를 xv6 proc에 박고, 호스트와 통신하는 채널 확보.
 
-### T-20 `[~]` proc 구조체 확장
+### T-20 `[x]` proc 구조체 확장
 - **depends**: T-06, T-10
 - **files**: `xv6-src/kernel/proc.h`, `xv6-src/kernel/proc.c`
 - **verify**: fork 후 자식 proc의 `agent_role`, `priority` 필드가 부모로부터 상속됨 (테스트: `xv6-src/user/test_proc_fields.c`)
