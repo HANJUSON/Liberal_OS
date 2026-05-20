@@ -153,14 +153,14 @@
 - **estimate**: 1시간
 - **assignee**: agent
 
-### T-26 `[~]` host proxy daemon live 모드 (Upstage 통합)
+### T-26 `[x]` host proxy daemon live 모드 (Upstage 통합)
 - **depends**: T-25, T-04
 - **files**: `host/proxy_daemon.py`
 - **verify**: `MODE=live`로 xv6에서 짧은 LLM 요청 → solar-pro 응답
 - **estimate**: 1시간
 - **assignee**: agent
 
-### T-27 `[~]` LLM 응답 캐시 (replay 모드)
+### T-27 `[x]` LLM 응답 캐시 (replay 모드)
 - **depends**: T-26
 - **files**: `host/proxy_daemon.py`, `.cache/llm/`
 - **verify**: 동일 입력 두 번 호출 시 두 번째는 캐시 사용 (timestamp 비교로 확인)
@@ -338,6 +338,6 @@
 
 ## 마지막 갱신
 
-2026-05-20 — Phase 1 완료 + Phase 2 부분 진행
-  [x] T-01~T-10, T-20, T-21, T-22.
-  다음 후보: T-23 (virtio serial — 까다로움), T-24, T-25.
+2026-05-20 — Phase 1 + Phase 2 완료
+  [x] T-01~T-10, T-20, T-21, T-22, T-23, T-24, T-25, T-26, T-27.
+  다음 단계: Phase 3 (T-30 parser agent 등 5종 에이전트 + T-35 orchestrator).

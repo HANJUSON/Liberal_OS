@@ -1,117 +1,208 @@
 """host/proxy_daemon.py — Liberal_OS host-side proxy daemon.
 
-T-25 ships the **mock mode** of this daemon: spawn xv6 under QEMU,
-listen on its console serial for PROXY_REQ frames emitted by user
-programs that include ``user/proxy_client.h`` (T-24), and reply with
-PROXY_RES frames. Mock mode is pure echo — it does not call any LLM —
-which keeps autotest hermetic.
+Phase 2 milestone, three modes:
 
-Frame format (must match user/proxy_client.h):
+* ``mock``   — pure echo, no network. Default. Used by autotest. (T-25)
+* ``live``   — real Upstage Solar Pro 3 call via the OpenAI-compatible
+               SDK; caches every successful response on disk so a
+               subsequent live or replay run hits cache. (T-26)
+* ``replay`` — cache-only. Cache miss raises so eval runs can't silently
+               drift onto a fresh API call. (T-27)
+
+Frame format on the xv6 console serial (matches user/proxy_client.h):
 
     PROXY_REQ\\t<role>\\t<prompt>\\n     (xv6 → host)
     PROXY_RES\\t<result>\\n              (host → xv6)
 
-Modes (--mode):
-
-    mock     — echo prompt as result (default; T-25)
-    live     — real Upstage Solar Pro 3 call (T-26)
-    replay   — disk-backed cache of prior live responses (T-27)
-
-The self-test (``--self-test``) spawns xv6, drives ``proxytest hello``
-in the guest shell, services the resulting PROXY_REQ, waits for
-PROXY_TEST_OK, and emits one-line JSON. This is the T-24/T-25 verify
-gate.
+Self-test (``--self-test``) spawns xv6, drives ``proxytest <role>
+<prompt>``, services the resulting PROXY_REQ, and waits for the guest
+to print PROXY_TEST_OK / PROXY_TEST_DIFF. The mock self-test is the
+T-25 verify gate; replay self-test exercises cache hit/miss semantics
+without ever touching the network and so doubles as the T-27 verify.
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import pathlib
 import sys
 import time
+from typing import Optional
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "host"))
 
-from proxy_pipe import Xv6Channel  # noqa: E402  reuse the T-23 transport
-
+from proxy_pipe import Xv6Channel  # noqa: E402  reuse T-23 transport
 
 PROXY_REQ_TAG = "PROXY_REQ"
 PROXY_RES_TAG = "PROXY_RES"
+CACHE_DIR = ROOT / ".cache" / "llm"
+
+
+def _cache_key(role: str, prompt: str) -> str:
+    return hashlib.sha256(f"{role}|{prompt}".encode("utf-8")).hexdigest()
+
+
+def cache_get(role: str, prompt: str) -> Optional[str]:
+    path = CACHE_DIR / f"{_cache_key(role, prompt)}.json"
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text())["result"]
+    except (json.JSONDecodeError, KeyError):
+        return None
+
+
+def cache_put(role: str, prompt: str, result: str) -> None:
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    path = CACHE_DIR / f"{_cache_key(role, prompt)}.json"
+    payload = {
+        "role": role,
+        "prompt": prompt,
+        "result": result,
+        "ts": time.time(),
+    }
+    path.write_text(json.dumps(payload, ensure_ascii=False))
+
+
+class ReplayMiss(RuntimeError):
+    """Replay mode encountered a request with no cached response."""
 
 
 def mock_handler(role: str, prompt: str) -> str:
-    """Echo the prompt unchanged; role is logged via the caller."""
-    return prompt
+    return prompt  # pure echo — matches proxytest.c equality check.
 
 
-def run_self_test(timeout_s: float = 20.0) -> int:
+def live_handler(role: str, prompt: str) -> str:
+    cached = cache_get(role, prompt)
+    if cached is not None:
+        return cached
+    api_key = os.environ.get("UPSTAGE_API_KEY")
+    if not api_key:
+        raise RuntimeError("UPSTAGE_API_KEY missing — set it in .env for live mode")
+    from openai import OpenAI  # type: ignore[import-not-found]
+    client = OpenAI(api_key=api_key, base_url="https://api.upstage.ai/v1")
+    response = client.chat.completions.create(
+        model="solar-pro",
+        max_tokens=256,
+        messages=[
+            {"role": "system", "content": f"You are the Liberal_OS {role} agent."},
+            {"role": "user", "content": prompt},
+        ],
+    )
+    result = response.choices[0].message.content or ""
+    cache_put(role, prompt, result)
+    return result
+
+
+def replay_handler(role: str, prompt: str) -> str:
+    cached = cache_get(role, prompt)
+    if cached is None:
+        raise ReplayMiss(f"no cache for role={role!r} prompt={prompt!r}")
+    return cached
+
+
+HANDLERS = {
+    "mock": mock_handler,
+    "live": live_handler,
+    "replay": replay_handler,
+}
+
+
+def _load_dotenv_if_present() -> None:
+    try:
+        from dotenv import load_dotenv  # type: ignore[import-not-found]
+    except ImportError:
+        return
+    load_dotenv()
+
+
+def _drive_proxytest(ch: Xv6Channel, mode: str, role: str, prompt: str,
+                     timeout_s: float) -> dict[str, object]:
+    """Spawn proxytest in xv6, service one PROXY_REQ, return self-test result."""
     started = time.monotonic()
+    handler = HANDLERS[mode]
+
+    ch.send(f"proxytest {role} {prompt}\n")
+
+    deadline = time.monotonic() + timeout_s
+    line = bytearray()
+    served = 0
+    last_error: Optional[str] = None
+
+    while time.monotonic() < deadline:
+        try:
+            chunk = os.read(ch.proc.stdout.fileno(), 4096)
+        except BlockingIOError:
+            chunk = b""
+        if not chunk:
+            time.sleep(0.05)
+            continue
+        for byte in chunk:
+            if byte != 0x0A:
+                line.append(byte)
+                continue
+            text = bytes(line).decode("utf-8", "replace")
+            line.clear()
+            if text.startswith(PROXY_REQ_TAG + "\t"):
+                parts = text.split("\t", 2)
+                if len(parts) != 3:
+                    continue
+                _, got_role, got_prompt = parts
+                try:
+                    reply = handler(got_role, got_prompt)
+                    ch.send(f"{PROXY_RES_TAG}\t{reply}\n")
+                    served += 1
+                except Exception as exc:  # noqa: BLE001
+                    last_error = f"{type(exc).__name__}: {exc}"
+                    # Send a sentinel so the guest doesn't hang waiting.
+                    ch.send(f"{PROXY_RES_TAG}\t__HANDLER_ERROR__\n")
+            elif "PROXY_TEST_OK" in text:
+                return {
+                    "ok": True,
+                    "mode": mode,
+                    "served": served,
+                    "elapsed_s": round(time.monotonic() - started, 3),
+                }
+            elif "PROXY_TEST_DIFF" in text:
+                return {
+                    "ok": False,
+                    "mode": mode,
+                    "served": served,
+                    "reason": "response differs from prompt (expected for live mode)",
+                    "last_error": last_error,
+                    "elapsed_s": round(time.monotonic() - started, 3),
+                }
+            elif "PROXY_TEST_FAIL" in text:
+                return {
+                    "ok": False,
+                    "mode": mode,
+                    "served": served,
+                    "reason": text,
+                    "last_error": last_error,
+                    "elapsed_s": round(time.monotonic() - started, 3),
+                }
+
+    return {
+        "ok": False,
+        "mode": mode,
+        "served": served,
+        "reason": "timeout",
+        "last_error": last_error,
+        "elapsed_s": round(time.monotonic() - started, 3),
+    }
+
+
+def run_self_test(mode: str, role: str, prompt: str, timeout_s: float) -> int:
+    _load_dotenv_if_present()
     ch = Xv6Channel()
-    log_lines: list[str] = []
     try:
         ch.wait_for(b"init: starting sh", timeout=15.0)
-
-        # Drive a request from the guest. proxytest writes its own
-        # PROXY_REQ via proxy_client.h; the shell prompt then waits.
-        ch.send("proxytest hello\n")
-
-        # Service the channel until we either see PROXY_TEST_OK or time out.
-        deadline = time.monotonic() + timeout_s
-        line = bytearray()
-        served = 0
-        while time.monotonic() < deadline:
-            try:
-                chunk = os.read(ch.proc.stdout.fileno(), 4096)
-            except BlockingIOError:
-                chunk = b""
-            if not chunk:
-                time.sleep(0.05)
-                continue
-            for byte in chunk:
-                if byte == 0x0A:  # '\n'
-                    text = bytes(line).decode("utf-8", "replace")
-                    log_lines.append(text)
-                    line.clear()
-                    if text.startswith(PROXY_REQ_TAG + "\t"):
-                        parts = text.split("\t", 2)
-                        if len(parts) == 3:
-                            _, role, prompt = parts
-                            reply = mock_handler(role, prompt)
-                            ch.send(f"{PROXY_RES_TAG}\t{reply}\n")
-                            served += 1
-                    elif "PROXY_TEST_OK" in text:
-                        out = {
-                            "ok": True,
-                            "mode": "mock",
-                            "served": served,
-                            "elapsed_s": round(time.monotonic() - started, 3),
-                        }
-                        print(json.dumps(out))
-                        return 0
-                    elif "PROXY_TEST_FAIL" in text or "PROXY_TEST_DIFF" in text:
-                        out = {
-                            "ok": False,
-                            "mode": "mock",
-                            "served": served,
-                            "reason": text,
-                            "elapsed_s": round(time.monotonic() - started, 3),
-                        }
-                        print(json.dumps(out))
-                        return 1
-                else:
-                    line.append(byte)
-        out = {
-            "ok": False,
-            "mode": "mock",
-            "served": served,
-            "reason": "timeout",
-            "tail": log_lines[-10:],
-            "elapsed_s": round(time.monotonic() - started, 3),
-        }
-        print(json.dumps(out))
-        return 1
+        result = _drive_proxytest(ch, mode, role, prompt, timeout_s)
+        print(json.dumps(result, ensure_ascii=False))
+        return 0 if result.get("ok") else 1
     finally:
         ch.close()
 
@@ -119,19 +210,15 @@ def run_self_test(timeout_s: float = 20.0) -> int:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--mode", choices=("mock", "live", "replay"), default="mock")
+    ap.add_argument("--role", default="echo")
+    ap.add_argument("--prompt", default="hello")
+    ap.add_argument("--timeout", type=float, default=20.0)
     ap.add_argument("--self-test", action="store_true",
-                    help="spawn xv6, drive proxytest, verify echo round-trip")
+                    help="spawn xv6, drive proxytest, verify the round trip")
     args = ap.parse_args()
 
-    if args.mode != "mock":
-        # live/replay arrive in T-26 / T-27; fail loudly until then.
-        print(json.dumps({"ok": False, "error": f"mode {args.mode!r} not implemented yet"}))
-        return 2
-
-    # Default action when invoked: run the self-test. (A standalone listen
-    # loop driven by an external orchestrator can be added in a later task.)
     if args.self_test or True:
-        return run_self_test()
+        return run_self_test(args.mode, args.role, args.prompt, args.timeout)
 
 
 if __name__ == "__main__":
