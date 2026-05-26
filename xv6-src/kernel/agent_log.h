@@ -13,7 +13,7 @@
 // Kept dependency-free so it works from any kernel context, including
 // early boot before proc.h's full definitions are visible. Phase 2
 // will add a richer variant that also tags pid/agent_role once the
-// proc struct carries those fields (see TASKS.md T-20+).
+// proc struct carries those fields (see MASTER_PLAN.md T-20+).
 
 #define AGENT_LOG(level, fmt, ...) \
   printf("[AGENT][" level "] " fmt "\n", ##__VA_ARGS__)

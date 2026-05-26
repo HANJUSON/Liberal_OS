@@ -444,7 +444,7 @@ kwait(uint64 addr)
 // Strict priority (higher int = higher priority). Within one priority
 // level, the scan starts from index 0 each time, which biases toward
 // lower-pid procs — acceptable for a Phase 5 demonstration and noted
-// in TASKS.md as a fairness trade-off (true round-robin within a
+// in MASTER_PLAN.md as a fairness trade-off (true round-robin within a
 // priority level would need a rotating cursor). priority=0 is the
 // default set by allocproc, so unmodified xv6 behaviour reduces to
 // the original Round Robin.

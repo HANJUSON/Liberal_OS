@@ -161,7 +161,7 @@ the guest. We split responsibilities cleanly:
 Both halves connect over the **console serial** that QEMU already
 exposes under `-nographic`. The original design called for a dedicated
 virtio-serial port, but we adopt the *chardev pipe fallback* the task
-plan explicitly endorses (`TASKS.md` T-23 note): the existing serial
+plan explicitly endorses (`MASTER_PLAN.md` T-23 note): the existing serial
 carries both shell input/output **and** the framed PROXY traffic;
 demux happens by line prefix on each side. This avoids writing a
 brand-new xv6 device driver while keeping the public proxy API
@@ -234,8 +234,10 @@ detail in `HARNESS.md`; in summary:
 * `CLAUDE.md` (293 lines) — operating manual, work-loop rules, eight
   inviolable constraints (no Linux primitives, no API keys in source,
   no force-push, etc.).
-* `TASKS.md` (~350 lines) — every Phase-1-to-7 work item with
-  dependency graph, files-list, verify command, estimate.
+* `MASTER_PLAN.md` (~865 lines) — Part I records design decisions
+  (OS-mapping table, host-guest separation, evaluation plan) and
+  Part II lists every Phase-1-to-7 work item with dependency graph,
+  files-list, verify command, estimate.
 * `BLOCKED.md` — protocol for the agent to surrender a task and write
   a structured incident note.
 * `tests/autotest.sh` (~76 lines) — headless QEMU + smoke gate that
@@ -431,7 +433,7 @@ fallback : if none (because another CPU claimed it between passes),
 
 Strict priority is achieved without sacrificing multi-CPU progress.
 Within a single priority level, the scan biases toward lower pids — a
-fairness trade-off explicitly documented in TASKS.md and in code
+fairness trade-off explicitly documented in MASTER_PLAN.md and in code
 comments. `priority = 0` is the default set by `allocproc()`, so a
 stock xv6 process tree (init, sh, all UPROGS that do not call
 `setprio`) sees Round-Robin scheduling identical to the original

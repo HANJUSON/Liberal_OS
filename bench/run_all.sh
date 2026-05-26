@@ -4,7 +4,7 @@
 # Runs the e2e mock pipeline N times (default 5) and captures one JSON
 # per run plus a summary. Phase 4/5-dependent experiments (Evaluator
 # retry quality, scheduler priority effect) are intentionally skipped
-# until those phases land; see TASKS.md T-41 / T-52.
+# until those phases land; see MASTER_PLAN.md T-41 / T-52.
 #
 # Env knobs:
 #   BENCH_N=<n>          — number of e2e iterations (default 5)
