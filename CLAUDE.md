@@ -57,7 +57,7 @@
 ### 2.4 작업 종료
 1. `MASTER_PLAN.md` Part II의 해당 작업 상태를 `[x]` DONE으로 변경
 2. 커밋: `feat(T-NN): <한 줄 요약>` (Conventional Commits)
-3. 커밋 전 `git diff --staged | grep -iE 'up-[a-z0-9]{20}|api[_-]?key'` 자가 검증 (API 키 누설 방지)
+3. 커밋 전 `git diff --staged | grep -iE 'up[-_][a-z0-9_-]{20,}|api[_-]?key'` 자가 검증 (API 키 누설 방지)
 4. 절대 `git push` 하지 않는다
 
 ---
