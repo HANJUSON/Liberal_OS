@@ -788,7 +788,7 @@ echo "Done: out/REPORT.md"
 - **estimate**: 4시간 (Opus 권장)
 - **assignee**: human + claude
 
-### T-71 Development Process Document
+### T-71 `[~]` Development Process Document
 - **depends**: T-70
 - **files**: `PROCESS.md`
 - **verify**: 주차별 회의록 + 의사결정 + 이슈 해결 포함
