@@ -795,7 +795,7 @@ echo "Done: out/REPORT.md"
 - **estimate**: 2시간
 - **assignee**: human + claude
 
-### T-72 `[~]` 영어 슬라이드 초안
+### T-72 `[x]` 영어 슬라이드 초안
 - **depends**: T-70
 - **files**: `slides/draft.md` (마크다운 → pptx)
 - **verify**: 15분 발표 분량, 영어 only
