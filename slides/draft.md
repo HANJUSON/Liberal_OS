@@ -48,7 +48,15 @@ Why this scenario *needs* OS decisions:
 - Quality-gated retries → Supervisor pattern → IPC + signals
 - "Critical now, info later" → priority scheduling
 
-*Speaker (≈60s): walk through the diagram left-to-right. Land on the four reasons.*
+> **Framing note.** The workload (log triage) is borrowed from
+> GuideLine §2's Direction-B examples, but our deliverable is the
+> **A-side OS mechanisms** that run it. We picked a B-flavored
+> workload because it stresses isolation, IPC, scheduling, and
+> syscalls harder than a generic chat agent would.
+
+*Speaker (≈60s): walk through the diagram left-to-right. Land on the four reasons.
+If asked "isn't this Direction B?" — point to the framing note: the WORKLOAD is
+B-flavored on purpose; the CONTRIBUTION is the A-side xv6 mechanisms in §3.*
 
 ---
 
