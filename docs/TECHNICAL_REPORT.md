@@ -515,7 +515,9 @@ The host daemon's `_drive_triage` aggregates per-run counts of
 | `evaluator_lines` | §10.2 | daemon JSON | ✓ |
 | `eval_retries` / `eval_fails` / `eval_oks` | §9 | daemon JSON | ✓ |
 | `served[role]` per role | §4.2 | daemon JSON | ✓ |
-| Sequential vs parallel speedup | guideline §6 | needs `triage_seq.c` | deferred |
+| Spearman ρ (priority vs finish order) | §10.3 | `--priotest` JSON | ✓ |
+| Sequential vs parallel speedup | §10.4 | analytical model + caveats | model only (mock has L=0) |
+| Retry **quality** delta | §10.2 | live-mode bench | structurally 0 pp under mock; deferred to T-62 |
 | Fault isolation rate | guideline §6 | needs deliberate-kill test | deferred |
 
 ### §10.2 Mock end-to-end (5-iteration)
@@ -542,24 +544,45 @@ second end-to-end.
 ### §10.3 Priority-scheduling effect
 
 `priotest` with six CPU-bound children on a 3-CPU QEMU produces
-strict priority-ordered completion (§8.1). The xv6 `uptime()` tick
-resolution is too coarse to expose absolute ms-level deltas, but the
-ordering itself is the load-bearing evidence: under the unmodified
-Round Robin scheduler the same workload completes in approximately
-arbitrary order.
+priority-ordered completion (§8.1). Measured via `--priotest` mode
+of `host/proxy_daemon.py`, the Spearman rank correlation between
+assigned priority and finish order is **ρ ≈ −0.94 to −1.0** (sign
+negative because higher priority maps to smaller order index;
+N=6 over multiple runs). The xv6 `uptime()` tick resolution is too
+coarse to expose absolute ms-level deltas, but the ordering itself
+is the load-bearing evidence: under the unmodified Round Robin
+scheduler the same workload completes in approximately arbitrary
+order (ρ ≈ 0).
 
-### §10.4 What the numbers do **not** say
+### §10.4 What the numbers do **not** say — speedup causality
 
-The 0.98 s end-to-end figure is not a *throughput* claim. xv6's UART
-is the bottleneck (each PROXY_REQ/RES frame is bytes-over-serial),
-and the mock host echoes within microseconds, so the wall-clock is
-dominated by serial framing and context switches between the five
-agent processes. A live LLM call adds tens to hundreds of
-milliseconds of network latency per `proxy_call`; the parallel
-pipeline cannot overlap those because of the `proxy_lock`
-serialisation called out in §4.3 and §11. The architecture is
-optimised for *correctness and observability* under educational
-constraints, not for raw QPS.
+The 0.98 s (mock) end-to-end figure is **not** a *throughput* or
+*LLM-parallelism* claim. Two facts must be stated bluntly because
+peer-reviewers will otherwise read the bench JSON wrong:
+
+1. **Mock latency is zero.** `mock_handler` in `host/proxy_daemon.py`
+   is a pure echo and returns within microseconds. The 0.98–1.4 s
+   wall-clock we observe is xv6 boot, fork/exec, console-serial framing,
+   and pipe plumbing — **not** the LLM workload. The same `triage`
+   run with a sequential xv6 variant would also clock well under a
+   second because the LLM contribution to the budget is ε.
+2. **`proxy_lock` serialises proxy_call.** §3 row 4 and §4.3 record
+   that `proxylock(2)` / `proxyunlock(2)` wrap the `send + recv` of
+   every `proxy_call`. This is by design (it avoids response-demux
+   races between sibling agents sharing one console fd) but it means
+   **stages cannot overlap their LLM transactions** — only their
+   xv6-side CPU/pipe work. Under live mode where `L ≫ 0`, the
+   bottleneck shifts from xv6 plumbing onto the serialised proxy,
+   and the analytical pipeline speedup `N·M / (N+M−1)` (`out/REPORT.md`
+   §4) is partially eroded.
+
+The honest statement is therefore: **measured wall-clock is dominated
+by xv6 plumbing; the pipeline architecture demonstrably overlaps
+stage CPU work; LLM-call parallelism is bounded above by `proxy_lock`
+and below by mock latency = 0; live-mode measurement of true speedup
+is `MASTER_PLAN.md` T-62 (human-authorised).** Request-id
+multiplexing in `proxy_daemon.py` (future work) would lift the
+proxy_lock ceiling.
 
 What the numbers *do* say is that the system is **deterministic and
 internally consistent**: the five agents each serve five lines; the
