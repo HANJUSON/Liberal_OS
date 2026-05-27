@@ -309,6 +309,89 @@ def run_triage(mode: str, input_file: str, timeout_s: float) -> int:
         ch.close()
 
 
+def _drive_priotest(ch: Xv6Channel, timeout_s: float) -> dict[str, object]:
+    """Run `priotest` in xv6, parse DONE lines, return completion order."""
+    started = time.monotonic()
+    ch.send("priotest\n")
+
+    deadline = time.monotonic() + timeout_s
+    line = bytearray()
+    done_records: list[dict[str, int]] = []
+
+    while time.monotonic() < deadline:
+        try:
+            chunk = os.read(ch.proc.stdout.fileno(), 4096)
+        except BlockingIOError:
+            chunk = b""
+        if not chunk:
+            time.sleep(0.02)
+            continue
+        for byte in chunk:
+            if byte != 0x0A:
+                line.append(byte)
+                continue
+            text = bytes(line).decode("utf-8", "replace")
+            line.clear()
+            if text.startswith("DONE i="):
+                # Format: "DONE i=<n> prio=<p> t=<ticks>"
+                parts = {}
+                for token in text.split():
+                    if "=" in token:
+                        k, v = token.split("=", 1)
+                        try:
+                            parts[k] = int(v)
+                        except ValueError:
+                            pass
+                if "i" in parts and "prio" in parts and "t" in parts:
+                    done_records.append({
+                        "i": parts["i"],
+                        "prio": parts["prio"],
+                        "t": parts["t"],
+                        "order": len(done_records),
+                    })
+            elif text == "PRIOTEST_DONE":
+                priorities = [r["prio"] for r in done_records]
+                # Spearman-style rank correlation between finish order and
+                # priority: higher priority should finish earlier (smaller order).
+                if len(priorities) >= 2:
+                    n = len(priorities)
+                    order = list(range(n))
+                    rank_diff_sq = sum(
+                        (order[i] - (n - 1 - sorted(priorities, reverse=True).index(priorities[i]))) ** 2
+                        for i in range(n)
+                    )
+                    rho = 1 - (6 * rank_diff_sq) / (n * (n * n - 1))
+                else:
+                    rho = 0.0
+                return {
+                    "ok": True,
+                    "n_children": len(done_records),
+                    "records": done_records,
+                    "rho_prio_vs_order": round(rho, 3),
+                    "elapsed_s": round(time.monotonic() - started, 3),
+                }
+
+    return {
+        "ok": False,
+        "reason": "timeout",
+        "records": done_records,
+        "elapsed_s": round(time.monotonic() - started, 3),
+    }
+
+
+def run_priotest(timeout_s: float) -> int:
+    _load_dotenv_if_present()
+    ch = Xv6Channel()
+    try:
+        ch.wait_for(b"init: starting sh", timeout=15.0)
+        time.sleep(0.2)
+        result = _drive_priotest(ch, timeout_s)
+        print(json.dumps(result, ensure_ascii=False))
+        return 0 if result.get("ok") else 1
+    finally:
+        ch.close()
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--mode", choices=("mock", "live", "replay"), default="mock")
@@ -319,8 +402,12 @@ def main() -> int:
                     help="spawn xv6, drive proxytest, verify the round trip")
     ap.add_argument("--triage", metavar="INPUT",
                     help="spawn xv6, run `triage <INPUT>`, service the 5-stage pipeline")
+    ap.add_argument("--priotest", action="store_true",
+                    help="spawn xv6, run `priotest`, capture priority-order DONE lines")
     args = ap.parse_args()
 
+    if args.priotest:
+        return run_priotest(args.timeout)
     if args.triage:
         return run_triage(args.mode, args.triage, args.timeout)
     return run_self_test(args.mode, args.role, args.prompt, args.timeout)
