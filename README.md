@@ -1,325 +1,144 @@
-# LLM 멀티에이전트 시스템 — OS 레벨 구현 가이드
+# Liberal_OS — xv6 기반 LLM 멀티에이전트 OS
 
-> 팀 프로젝트: 장점 · 구현 방법 · 평가 및 모니터링
+> 2026 봄 OS 강좌 팀 프로젝트 · 방향 **A (OS for LLM)**
 
----
+## 1. 한 문단 요약
 
-## 목차
+**Liberal_OS**는 xv6 교육용 커널을 **직접 수정**하여 5종의 LLM 에이전트(parser / classifier / root-cause / fix-suggester / evaluator)를 xv6 프로세스로 실행하고, OS 수준의 **프로세스 격리·IPC pipe·동기화(sleeplock)·우선순위 스케줄링·신규 시스템 콜**로 오케스트레이션하는 시스템이다. 시연용 시나리오는 5단계 로그 트리아지 파이프라인이며, 각 에이전트는 호스트 측 Proxy Daemon을 통해 **Upstage Solar Pro 3** 모델에 `read`/`write`로 접근한다. 모든 OS 메커니즘은 Linux 라이브러리(`multiprocessing`/`cgroups`/스레드 풀)를 *호출*하지 않고 xv6 소스(`proc.h`, `proc.c`, `console.c`, `syscall.c`, `sysproc.c` 등)에서 *직접 설계·구현*했다 — GuideLine §2가 요구하는 "OS 컴포넌트는 직접 설계하고 구현한 것이어야 한다"는 제약을 정면으로 만족한다.
 
-1. [멀티에이전트의 핵심 장점](#1-멀티에이전트의-핵심-장점)
-2. [OS 레벨 구현 방법](#2-os-레벨-구현-방법)
-3. [장점 확인 및 평가 방법](#3-장점-확인-및-평가-방법)
-4. [종합 모니터링](#4-종합-모니터링)
+## 2. 기술 스택
 
----
-
-## 1. 멀티에이전트의 핵심 장점
-
-### 1-1. 진정한 병렬 처리
-
-멀티프로세스는 Python GIL을 완전히 우회하여 CPU 코어 수만큼 실제 병렬 실행이 가능합니다. LLM API 호출처럼 I/O 바운드 작업은 멀티스레드만으로도 충분한 병렬화가 가능합니다.
-
-- **멀티프로세스**: GIL 우회, CPU 집약 작업에 효과적
-- **멀티스레드**: 가볍고 메모리 공유 가능, API 호출에 최적
-- **속도 향상 목표**: 2x 이상 (에이전트 수에 비례)
-
-### 1-2. 프로세스 격리 & 장애 격리
-
-한 에이전트 프로세스가 크래시해도 다른 에이전트에 영향을 주지 않습니다. 메모리 누수가 해당 프로세스에만 국한되며, 에이전트별 독립적인 환경변수 및 설정이 가능합니다.
-
-- 자식 프로세스 크래시 → 부모 프로세스 생존
-- 에이전트별 독립 메모리 공간
-- OS 레벨의 강제 종료 및 재시작 가능
-
-### 1-3. 메모리 사용량 제어
-
-OS 레벨에서 프로세스별 메모리 한도를 설정할 수 있습니다. `ulimit`, `cgroups`를 통해 에이전트별 리소스를 정밀하게 제어하고 프로파일링할 수 있습니다.
-
-- **ulimit**: 프로세스별 소프트/하드 메모리 한도
-- **cgroups**: 에이전트 그룹 단위 리소스 격리
-- **psutil**: 실시간 메모리 사용량 모니터링
-
-### 1-4. 스케줄링 & 우선순위 제어
-
-중요한 에이전트에 높은 CPU 우선순위를 부여하고, OS 스케줄러가 자동으로 부하를 분산합니다. `nice` 값(-20 ~ 19)으로 정밀한 우선순위 조정이 가능합니다.
-
-- **오케스트레이터**: `nice -10` (높은 우선순위)
-- **백그라운드 에이전트**: `nice 15` (낮은 우선순위)
-- `renice` 명령으로 실행 중 동적 변경 가능
-
----
-
-## 2. OS 레벨 구현 방법
-
-### 2-1. 아키텍처 패턴 비교
-
-| 구현 방법 | 난이도 | 병렬성 | 메모리 공유 | 적합한 상황 |
-|---|---|---|---|---|
-| 멀티스레드 | 낮음 | I/O 병렬 | 공유 가능 | LLM API 호출 병렬화 |
-| 멀티프로세스 | 중간 | 완전 병렬 | 불가 (IPC) | CPU 집약적 전처리 포함 |
-| Unix 파이프 | 낮음 | 순차 | 불가 | 에이전트를 독립 프로그램으로 |
-| 소켓 기반 | 높음 | 완전 병렬 | 불가 | 다른 서버에 분산 배포 |
-| 공유 파일시스템 | 낮음 | 비동기 | 파일로 공유 | 단순 프로토타입 |
-
-### 2-2. 멀티프로세스 기반
-
-각 에이전트를 독립 프로세스로 실행하는 방식으로, GIL을 완전히 우회하여 진정한 병렬 처리가 가능합니다. `Queue`를 통해 에이전트 간 메시지를 전달합니다.
-
-```python
-from multiprocessing import Process, Queue
-import anthropic
-
-def agent_process(name, system_prompt, input_queue, output_queue):
-    client = anthropic.Anthropic()
-    while True:
-        task = input_queue.get()
-        if task == 'STOP': break
-        response = client.messages.create(
-            model='claude-sonnet-4-20250514',
-            max_tokens=1000,
-            system=system_prompt,
-            messages=[{'role': 'user', 'content': task}]
-        )
-        output_queue.put({'agent': name, 'result': response.content[0].text})
-```
-
-### 2-3. 멀티스레드 기반
-
-I/O 바운드 작업(LLM API 호출)에 가장 효율적인 방식입니다. 프로세스보다 가볍고 메모리를 공유할 수 있으며, `Lock`으로 공유 자원을 보호합니다.
-
-```python
-import threading
-from queue import Queue
-
-lock = threading.Lock()
-shared_context = {}  # 스레드 간 공유 메모리
-
-class AgentThread(threading.Thread):
-    def run(self):
-        task = self.in_queue.get()
-        result = call_llm(self.system_prompt, task)
-        with lock:  # 공유 메모리 보호
-            shared_context[self.name] = result
-        self.out_queue.put(result)
-```
-
-### 2-4. Unix 파이프 기반
-
-에이전트를 완전히 독립된 프로그램으로 분리하고 Unix 파이프로 연결합니다. 각 에이전트는 `stdin`으로 입력을 받고 `stdout`으로 다음 에이전트에게 전달합니다.
-
-```bash
-# 파이프라인 실행 (셸 명령)
-python researcher.py | python analyst.py | python writer.py
-```
-
-```python
-# researcher.py
-import sys, anthropic
-task = sys.stdin.read().strip()
-response = client.messages.create(...)
-print(response.content[0].text)  # stdout → 다음 에이전트
-```
-
-### 2-5. 소켓 기반 분산 에이전트
-
-에이전트들이 네트워크 소켓으로 통신하며, 다른 머신에 분산 배포가 가능합니다. 오케스트레이터가 각 에이전트 서버를 호출하여 결과를 수집합니다.
-
-```python
-# 에이전트 서버 (agent_server.py)
-import socket, threading
-
-def run_agent_server(host, port, system_prompt):
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind((host, port))
-        s.listen()
-        while True:
-            conn, _ = s.accept()
-            threading.Thread(target=handle_client,
-                             args=(conn, system_prompt)).start()
-
-# 오케스트레이터에서 에이전트 호출
-research = call_agent('localhost', 9001, 'AI 트렌드 조사')
-analysis = call_agent('localhost', 9002, research)
-```
-
----
-
-## 3. 장점 확인 및 평가 방법
-
-### 3-1. 병렬 처리 효과 측정
-
-순차 실행과 병렬 실행의 시간을 비교하여 speedup 비율을 계산합니다. 목표 speedup은 **2x 이상**입니다.
-
-```python
-import time
-
-# 순차 실행 시간
-start = time.perf_counter()
-for task in tasks:
-    agent_func(task)
-sequential_time = time.perf_counter() - start
-
-# 병렬 실행 시간
-start = time.perf_counter()
-threads = [Thread(target=agent_func, args=(t,)) for t in tasks]
-[t.start() for t in threads]
-[t.join() for t in threads]
-parallel_time = time.perf_counter() - start
-
-speedup = sequential_time / parallel_time
-print(f'속도 향상: {speedup:.2f}x')
-```
-
-OS 명령어로도 실시간 확인이 가능합니다.
-
-```bash
-# 실시간 CPU 코어 사용률 확인
-htop -d 5
-
-# 프로세스별 CPU/메모리 사용률
-ps aux | grep python
-
-# 특정 PID의 스레드 목록
-ps -T -p <PID>
-```
-
-### 3-2. 장애 격리 확인
-
-자식 프로세스를 의도적으로 크래시시킨 후 부모 프로세스가 정상 동작하는지 확인합니다.
-
-```python
-from multiprocessing import Process, Queue
-import os
-
-def fault_isolation_test(in_q, out_q):
-    try:
-        task = in_q.get()
-        if 'crash' in task:
-            raise RuntimeError('에이전트 크래시!')
-        out_q.put(f'성공: {task}')
-    except Exception as e:
-        out_q.put(f'실패: {e}')  # 프로세스만 종료
-
-p = Process(target=fault_isolation_test, args=(in_q, out_q))
-p.start()
-# 자식 크래시 후에도 메인 프로세스 생존 확인
-print(f'메인 프로세스 PID: {os.getpid()}')  # 정상 출력됨
-```
-
-```bash
-# 프로세스 트리 확인
-pstree -p <메인_PID>
-
-# 자식 강제 종료 후 부모 생존 확인
-kill -9 <자식_PID>
-ps aux | grep python
-```
-
-### 3-3. 메모리 사용량 확인
-
-```python
-import resource, psutil, os
-
-def monitor_memory(pid):
-    proc = psutil.Process(pid)
-    info = proc.memory_info()
-    print(f'RSS: {info.rss / 1024 / 1024:.1f} MB')
-    print(f'VMS: {info.vms / 1024 / 1024:.1f} MB')
-```
-
-```bash
-# cgroups로 메모리 한도 설정 (Linux)
-cgcreate -g memory:/agent_group
-echo 536870912 > /sys/.../memory.limit_in_bytes
-cgexec -g memory:/agent_group python agent.py
-
-# 실시간 메모리 모니터링
-watch -n 1 'cat /sys/fs/cgroup/memory/agent_group/memory.usage_in_bytes'
-```
-
-### 3-4. 우선순위 제어 확인
-
-```python
-import os
-
-# 우선순위 설정 (소프트웨어 레벨)
-os.setpriority(os.PRIO_PROCESS, orchestrator_pid, -10)  # 높음
-os.setpriority(os.PRIO_PROCESS, background_pid, 10)     # 낮음
-```
-
-```bash
-# 셸에서 우선순위 확인
-ps -o pid,ni,pri,cmd -p <PID>
-
-# 실행 중 동적 변경
-renice -n 5 -p <PID>
-```
-
----
-
-## 4. 종합 모니터링
-
-### 4-1. AgentMonitor 클래스
-
-모든 에이전트의 CPU, 메모리, 스레드 수, 상태를 통합적으로 수집하고 리포트를 생성합니다.
-
-```python
-import psutil, time
-from collections import defaultdict
-
-class AgentMonitor:
-    def __init__(self, agent_pids: dict):
-        self.agent_pids = agent_pids  # {'리서처': pid, ...}
-        self.metrics = defaultdict(list)
-
-    def collect(self):
-        for name, pid in self.agent_pids.items():
-            try:
-                proc = psutil.Process(pid)
-                self.metrics[name].append({
-                    'cpu':     proc.cpu_percent(interval=0.1),
-                    'mem_mb':  proc.memory_info().rss / 1024 / 1024,
-                    'threads': proc.num_threads(),
-                    'status':  proc.status(),
-                })
-            except psutil.NoSuchProcess:
-                print(f'[경고] {name} 프로세스 종료됨')
-
-    def report(self):
-        for name, data in self.metrics.items():
-            avg_cpu = sum(d['cpu'] for d in data) / len(data)
-            max_mem = max(d['mem_mb'] for d in data)
-            print(f'[{name}] CPU: {avg_cpu:.1f}%  MEM: {max_mem:.1f}MB')
-
-    def run(self, interval=2, duration=60):
-        end = time.time() + duration
-        while time.time() < end:
-            self.collect()
-            time.sleep(interval)
-        self.report()
-```
-
-### 4-2. 핵심 지표 요약
-
-| 평가 항목 | 측정 방법 | 목표 기준 |
-|---|---|---|
-| 병렬 처리 효과 | `speedup = 순차시간 / 병렬시간` | 2x 이상 |
-| 장애 격리 | 자식 크래시 후 부모 생존 여부 | 100% 생존 |
-| 메모리 효율 | `psutil` / `/proc/<PID>/status` | 한도 내 유지 |
-| CPU 우선순위 | `ps -o ni` 또는 `htop` NI 컬럼 | 설정값 반영 |
-| 전체 자원 사용 | `htop`, `psutil`, `cgroups` 통계 | 코어 활용률 70%+ |
-| 에이전트 상태 | `AgentMonitor.collect()` | running 상태 유지 |
-
-### 4-3. 구현 방법 선택 가이드
-
-| 상황 | 권장 방법 |
+| 계층 | 사용 기술 |
 |---|---|
-| LLM API 호출 병렬화 | **멀티스레드** (I/O 바운드에 최적) |
-| CPU 집약적 전처리 포함 | **멀티프로세스** (GIL 우회) |
-| 에이전트를 독립 프로그램으로 | **Unix 파이프** |
-| 다른 서버에 분산 배포 | **소켓 / gRPC** |
-| 단순 프로토타입 | **공유 파일시스템** |
+| 게스트 OS | **xv6-riscv** (직접 수정한 커널) |
+| 가상화 | QEMU (riscv64) |
+| LLM 백엔드 | **Upstage Solar Pro 3** (OpenAI 호환 API) |
+| 호스트 측 중계 | Python 3.11+ (`openai`, `python-dotenv`), virtio console |
+| 빌드 | GNU make, `riscv64-unknown-elf-gcc` 툴체인 |
 
----
+직접 수정·신규 추가한 xv6 파일: `kernel/proc.{h,c}`, `kernel/console.c`, `kernel/syscall.{c,h}`, `kernel/sysproc.c`, `kernel/printf.c`, `user/usys.pl`, `user/user.h` + 신규 유저 프로그램(`triage`, `parser`, `classifier`, `rootcause`, `fixsuggest`, `evaluator`, `agentstat`, `setrole`, `priotest`, `procfields`, `proxytest`, `smoketest`, `logstress`).
 
-> **핵심**: 각 에이전트를 블랙박스 프로세스로 취급하고, OS가 제공하는 격리/스케줄링/모니터링 도구를 그대로 활용하는 것이 OS 레벨 멀티에이전트의 핵심입니다.
+## 3. OS 개념 매핑 (GuideLine §2 필수 제약)
+
+| # | 컴포넌트 | OS 개념 | xv6 구현 |
+|---|---|---|---|
+| 1 | per-agent metadata | **프로세스 관리** | `struct proc`에 `agent_role[16]` / `priority` / `agent_state` 추가, `allocproc`/`kfork`/`freeproc` 패치 |
+| 2 | 파이프라인 백본 | **IPC (pipe)** | 5-stage fork+pipe chain — `user/triage.c` |
+| 3 | host 통신 프레이밍 | **IPC (line-framed)** | `PROXY_REQ\t<id>\t<role>\t<prompt>` / `PROXY_RES\t<id>\t<result>` |
+| 4 | 동시 console·proxy 접근 | **동기화 (sleeplock)** | `cons_write_lock` + `proxy_lock`; 신규 시스콜 `proxylock(2)`/`proxyunlock(2)` |
+| 5 | 에이전트 우선순위 | **스케줄링** | `scheduler()`에 max-priority 2-pass 선택 + `setprio(2)` 신규 시스콜 (nice-style [-20, 19] 클램프) |
+| 6 | 장애 격리 | **프로세스 격리** | xv6 page-table 격리를 활용; `procfields` 테스트로 fork+pipe 의미 보존 검증 |
+| 7 | 관측성 | **시스템 콜** | 신규 시스콜 6종: `setrole(22)`, `agentstat(23)`, `proxylock(24)`, `proxyunlock(25)`, `setprio(26)` + panic dump |
+
+GuideLine §2가 요구하는 "최소 한 가지, 가능하면 그 이상"의 OS 개념을 **7개 직접 구현**. 설계 근거와 구현 디테일은 [`docs/TECHNICAL_REPORT.md`](docs/TECHNICAL_REPORT.md) §3·§5 참조.
+
+## 4. 셋업 안내
+
+### 4.1 시스템 의존성 (Ubuntu / WSL2 기준)
+
+```bash
+sudo apt-get install -y \
+  gcc-riscv64-unknown-elf gdb-multiarch qemu-system-misc \
+  make python3 python3-pip
+```
+
+QEMU 버전 5.1 이상 필요 (xv6-riscv 빌드 요구사항). `qemu-system-riscv64 --version`으로 확인.
+
+### 4.2 Python 의존성
+
+```bash
+pip install -r host/requirements.txt
+# openai>=1.40.0, python-dotenv>=1.0.0
+```
+
+### 4.3 Upstage API 키 발급 및 등록
+
+1. <https://console.upstage.ai/docs>에서 API 키 발급 (강사 배포 키 또는 개인 키).
+2. 저장소 루트에 `.env` 작성 (**절대 커밋 금지** — `.gitignore`에 이미 포함):
+   ```env
+   UPSTAGE_API_KEY=up-xxxxxxxxxxxxxxxxxxxx
+   MODE=mock          # mock | replay | live
+   ```
+3. 템플릿: `.env.example` 참조.
+
+## 5. 실행 방법
+
+### A. xv6 셸에서 직접 시연
+
+```bash
+make qemu
+# xv6 셸 프롬프트 도달 후:
+$ triage short.log     # 5-stage 파이프라인 실행
+$ agentstat            # 활성 proc 메타데이터 JSON 출력
+$ priotest             # 우선순위 스케줄러 효과 측정
+# Ctrl-A X 로 QEMU 종료
+```
+
+### B. 호스트 자동 드라이브 (Proxy 경유 end-to-end)
+
+```bash
+# mock 모드 (네트워크 없음, autotest 기본):
+python3 host/proxy_daemon.py --mode mock --triage samples/short.log
+
+# replay 모드 (캐시만 사용, 벤치마크 재현):
+python3 host/proxy_daemon.py --mode replay --triage samples/short.log
+
+# live 모드 (실 Upstage API, 시연용):
+python3 host/proxy_daemon.py --mode live --triage samples/short.log
+```
+
+### C. 자동 테스트 · 회귀 · 벤치마크
+
+```bash
+make autotest                # 60s 헤드리스 xv6 부팅 + smoke 통과
+make regression              # 커밋 전 회귀 게이트 (autotest + e2e mock)
+bash bench/run_all.sh        # 5개 실험 5회 반복 (사람만 실행, Upstage 호출)
+python3 bench/report.py out/bench/ > out/REPORT.md
+```
+
+## 6. 데모
+
+xv6 셸에서 `triage short.log` 실행 시 5개 에이전트가 fork+pipe로 연결되어 로그를 처리하고, evaluator가 품질 검증 후 최대 3회 재시도 신호를 보낸다. `agentstat` 출력 형식 (`kernel/sysproc.c:160` 기준):
+
+```json
+[{"pid":3,"name":"triage","role":"triage","prio":0,"st":"sleep"},
+ {"pid":4,"name":"parser","role":"parser","prio":0,"st":"run"},
+ {"pid":5,"name":"classifier","role":"classifier","prio":0,"st":"runble"},
+ ...]
+```
+
+데모 GIF (`docs/demo.gif`)는 발표 전 추가 예정. 스크린샷은 [`docs/`](docs/) 디렉토리 참조.
+
+## 7. 디렉토리 구조
+
+```
+liberal_os/
+├── xv6-src/            # 수정한 xv6 소스
+│   ├── kernel/         # proc, scheduler, console, syscall 등 수정
+│   └── user/           # triage, parser, classifier, ... 유저 프로그램
+├── host/               # 호스트 측 Proxy Daemon (Python)
+├── tests/              # autotest.sh, regression.sh, e2e_mock.sh
+├── bench/              # run_all.sh, report.py, summarize.py
+├── samples/            # 입력 로그 (short.log)
+├── docs/               # TECHNICAL_REPORT.md, demo 자료
+├── slides/             # draft.md (영어 발표 자료)
+├── out/                # 벤치/autotest 출력 (gitignore)
+└── .env.example        # API 키 템플릿 (실 키는 .env, gitignore)
+```
+
+## 8. 최종 산출물 (GuideLine §5)
+
+| # | 산출물 | 위치 |
+|---|---|---|
+| 1 | Application | 본 저장소 (`xv6-src/`, `host/`) + `make qemu` 시연 |
+| 2 | Technical Report | [`docs/TECHNICAL_REPORT.md`](docs/TECHNICAL_REPORT.md) + [`out/REPORT.md`](out/REPORT.md) |
+| 3 | Development Process Document | [`PROCESS.md`](PROCESS.md) |
+| 4 | Presentation Slides (영어) | [`slides/draft.md`](slides/draft.md) |
+
+## 9. 한계와 향후 작업
+
+- **LLM API 직렬화**: `proxylock(2)`이 sibling 에이전트의 `proxy_call`을 직렬화하므로, 측정된 wall-clock 단축은 API 병렬화가 아니라 xv6 측 stage overlap에서 발생. request-id 멀티플렉싱 기반의 진정한 병렬 API 호출은 future work.
+- **정적 DAG**: 5-stage 순서는 `triage.c`에 하드코딩. 동적 planner-executor·FS 기반 RAG·ReAct reflection 루프는 미구현.
+- **파일시스템 활용 깊이**: xv6 기존 fs를 입력 로그 전달에만 사용. 에이전트 컨텍스트 저장/복원 메커니즘은 미구현.
+
+설계 결정 기록과 작업 큐는 [`MASTER_PLAN.md`](MASTER_PLAN.md), 운영 매뉴얼은 [`CLAUDE.md`](CLAUDE.md), 회의록과 이슈 이력은 [`PROCESS.md`](PROCESS.md), 자율 하네스 설계는 [`HARNESS.md`](HARNESS.md) 참조.
