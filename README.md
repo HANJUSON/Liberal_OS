@@ -98,16 +98,23 @@ python3 bench/report.py out/bench/ > out/REPORT.md
 
 ## 6. 데모
 
-xv6 셸에서 `triage short.log` 실행 시 5개 에이전트가 fork+pipe로 연결되어 로그를 처리하고, evaluator가 품질 검증 후 최대 3회 재시도 신호를 보낸다. `agentstat` 출력 형식 (`kernel/sysproc.c:160` 기준):
+xv6 셸에서 `triage short.log` 실행 시 5개 에이전트가 fork+pipe로 연결되어 로그를 처리하고, evaluator가 품질 검증 후 최대 3회 재시도 신호를 보낸다.
 
-```json
-[{"pid":3,"name":"triage","role":"triage","prio":0,"st":"sleep"},
- {"pid":4,"name":"parser","role":"parser","prio":0,"st":"run"},
- {"pid":5,"name":"classifier","role":"classifier","prio":0,"st":"runble"},
- ...]
+전체 시연 흐름의 **텍스트 트랜스크립트**는 [`docs/demo_transcript.txt`](docs/demo_transcript.txt)에 캡처되어 있다 (xv6 부팅 → `agentstat` 베이스라인 → `triage short.log` → `agentstat` → `priotest`). 재생성:
+
+```bash
+python3 bench/capture_demo.py > docs/demo_transcript.txt
 ```
 
-데모 GIF (`docs/demo.gif`)는 발표 전 추가 예정. 스크린샷은 [`docs/`](docs/) 디렉토리 참조.
+`agentstat` 출력 형식 (`kernel/sysproc.c:160` 기준):
+
+```json
+[{"pid":1,"name":"init","role":"none","prio":0,"st":"sleep"},
+ {"pid":2,"name":"sh","role":"none","prio":0,"st":"sleep"},
+ {"pid":3,"name":"agentstat","role":"none","prio":0,"st":"run"}]
+```
+
+데모 GIF (`docs/demo.gif`)는 발표 전 사람이 화면 녹화로 추가 예정. 현재는 텍스트 트랜스크립트가 시연 증거로 사용 가능하다.
 
 ## 7. 디렉토리 구조
 
