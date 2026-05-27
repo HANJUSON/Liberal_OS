@@ -213,16 +213,34 @@ Every limitation is written down in `docs/TECHNICAL_REPORT.md` §11.
 
 ## Slide 12 — Future work (concrete, bounded)
 
-1. `triage_seq.c` sequential baseline + speedup report.
+**Near-term (no redesign needed):**
+
+1. `triage_seq.c` sequential baseline + measured speedup table.
 2. `agent_kill_test.c` for explicit fault-isolation benchmark.
 3. Real virtio-serial port + xv6 device driver (replace console-framing).
 4. Within-priority round-robin cursor in `scheduler()`.
 5. Upstream retry signal once a termination protocol is designed.
 6. Live-mode bench profile folded into `REPORT.md`.
 
-None of these require a redesign.
+**Beyond-the-static-DAG (architectural extensions, same OS primitives):**
 
-*Speaker (≈30s): "Architecture has room — these are deliverables, not pivots."*
+7. **Dynamic planner-executor** — first agent emits a JSON plan,
+   orchestrator forks workers per plan. Replaces hardcoded 5-stage
+   chain in `triage.c` with a small plan interpreter.
+8. **FS-backed RAG** — agents persist & retrieve context through the
+   xv6 file system (turns the unused §3 row into a real contribution).
+9. **ReAct reflection** — extend the Evaluator from quality gate to
+   thought/action loop, reusing the same `kill`+`sleep/wakeup` IPC.
+10. **Request-id multiplexing in `proxy_daemon`** — lifts the
+    `proxy_lock` ceiling so live-mode parallelism becomes measurable.
+
+None of 1–6 require a redesign; 7–10 reuse the OS primitives we already
+ship and would extend Liberal_OS from a single-shape pipeline to a
+general LLM-agent runtime.
+
+*Speaker (≈30s): "1–6 are deliverables. 7–10 are the architectural arc that turns
+this from a triage demo into a generic OS-for-LLM platform — same kernel work,
+new compositions."*
 
 ---
 
