@@ -99,7 +99,14 @@ Seven of the eight enumerated OS concepts are exercised directly in xv6 source.
 xv6 has no network stack — the proxy daemon owns the API call.
 From the guest's point of view, an LLM call is a `read`/`write` pair on a console fd.
 
-*Speaker (≈45s): emphasize that the abstraction boundary is the *guest* — xv6 never knows an LLM exists.*
+> **LLM backend choice:** Solar Pro 3 only. We considered NVIDIA NIM
+> (free, multimodal, embedding-friendly per GuideLine §4) but scoped
+> it out to maximize xv6-side depth instead of adding a second model
+> dependency. Single backend keeps the proxy daemon, cache key, and
+> replay determinism simple.
+
+*Speaker (≈45s): emphasize that the abstraction boundary is the *guest* — xv6 never knows an LLM exists.
+On NIM question: "we deliberately limited to one backend so the OS contribution stayed the centerpiece."*
 
 ---
 
