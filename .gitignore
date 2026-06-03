@@ -45,3 +45,10 @@ __pycache__/
 
 # Original harness drop-in (root-owned, superseded by root-level files)
 files/
+
+# Ralph Loop local session metadata
+.claude/ralph-loop.local.md
+
+# Local-only docs (progress report docx + its generator)
+docs/Liberal_OS_Progress_Report.docx
+docs/build_progress_report.py
