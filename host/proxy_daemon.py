@@ -200,14 +200,42 @@ def _drive_proxytest(ch: Xv6Channel, mode: str, role: str, prompt: str,
     }
 
 
+def _seq_command(input_file: str) -> str:
+    """Sequential 5-stage chain via shell `;` + file redirection. Each
+    stage fully completes before the next starts — used as the empirical
+    baseline against the fork+pipe parallel `triage`. The xv6 shell
+    tokenizer treats `< > ;` as boundaries (sh.c L269), so we omit
+    spaces to stay under the 100-byte input buffer."""
+    # Intermediate files: 1, 2, 3, 4 (root of xv6 fs, single-char names).
+    return (
+        f"parser<{input_file}>1;"
+        f"classifier<1>2;"
+        f"rootcause<2>3;"
+        f"fixsuggest<3>4;"
+        f"evaluator<4\n"
+    )
+
+
 def _drive_triage(ch: Xv6Channel, mode: str, input_file: str,
-                  timeout_s: float) -> dict[str, object]:
-    """Run `triage <input_file>` in xv6 and service every PROXY_REQ until
-    the evaluator emits TRIAGE_DONE (or we time out)."""
+                  timeout_s: float, *,
+                  topology: str = "parallel") -> dict[str, object]:
+    """Run the 5-stage triage pipeline in xv6 and service every PROXY_REQ
+    until the evaluator emits TRIAGE_DONE (or we time out).
+
+    topology = 'parallel'   — invokes `triage <input>` (fork+pipe, all
+                              stages concurrent — production path).
+    topology = 'sequential' — invokes a shell-sequenced chain with file
+                              redirection between stages (each stage runs
+                              to completion before next starts). Used as
+                              the empirical baseline for the speedup
+                              claim in out/REPORT.md."""
     started = time.monotonic()
     handler = HANDLERS[mode]
 
-    ch.send(f"triage {input_file}\n")
+    if topology == "sequential":
+        ch.send(_seq_command(input_file))
+    else:
+        ch.send(f"triage {input_file}\n")
 
     deadline = time.monotonic() + timeout_s
     line = bytearray()
@@ -261,6 +289,7 @@ def _drive_triage(ch: Xv6Channel, mode: str, input_file: str,
                 return {
                     "ok": ok,
                     "mode": mode,
+                    "topology": topology,
                     "served": served_by_role,
                     "evaluator_lines": len(evaluator_outputs),
                     "evaluator_sample": evaluator_outputs[:3],
@@ -274,6 +303,7 @@ def _drive_triage(ch: Xv6Channel, mode: str, input_file: str,
     return {
         "ok": False,
         "mode": mode,
+        "topology": topology,
         "served": served_by_role,
         "evaluator_lines": len(evaluator_outputs),
         "reason": "timeout",
@@ -296,13 +326,15 @@ def run_self_test(mode: str, role: str, prompt: str, timeout_s: float) -> int:
         ch.close()
 
 
-def run_triage(mode: str, input_file: str, timeout_s: float) -> int:
+def run_triage(mode: str, input_file: str, timeout_s: float,
+               topology: str = "parallel") -> int:
     _load_dotenv_if_present()
     ch = Xv6Channel()
     try:
         ch.wait_for(b"init: starting sh", timeout=15.0)
         time.sleep(0.2)
-        result = _drive_triage(ch, mode, input_file, timeout_s)
+        result = _drive_triage(ch, mode, input_file, timeout_s,
+                               topology=topology)
         print(json.dumps(result, ensure_ascii=False))
         return 0 if result.get("ok") else 1
     finally:
@@ -402,14 +434,22 @@ def main() -> int:
                     help="spawn xv6, drive proxytest, verify the round trip")
     ap.add_argument("--triage", metavar="INPUT",
                     help="spawn xv6, run `triage <INPUT>`, service the 5-stage pipeline")
+    ap.add_argument("--triage-sequential", metavar="INPUT",
+                    help="spawn xv6, run the 5 stages chained via shell ';' + file"
+                         " redirection (each stage completes before next). Empirical"
+                         " baseline for the parallel-pipeline speedup claim.")
     ap.add_argument("--priotest", action="store_true",
                     help="spawn xv6, run `priotest`, capture priority-order DONE lines")
     args = ap.parse_args()
 
     if args.priotest:
         return run_priotest(args.timeout)
+    if args.triage_sequential:
+        return run_triage(args.mode, args.triage_sequential, args.timeout,
+                          topology="sequential")
     if args.triage:
-        return run_triage(args.mode, args.triage, args.timeout)
+        return run_triage(args.mode, args.triage, args.timeout,
+                          topology="parallel")
     return run_self_test(args.mode, args.role, args.prompt, args.timeout)
 
 

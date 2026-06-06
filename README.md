@@ -14,7 +14,7 @@
 | 가상화 | QEMU (riscv64) |
 | LLM 백엔드 | **Upstage Solar Pro 3** (OpenAI 호환 API) |
 | 호스트 측 중계 | Python 3.11+ (`openai`, `python-dotenv`), virtio console |
-| 빌드 | GNU make, `riscv64-unknown-elf-gcc` 툴체인 |
+| 빌드 | GNU make, RISC-V 64-bit GCC 툴체인 (`riscv64-linux-gnu-gcc` 또는 `riscv64-unknown-elf-gcc` — Makefile이 자동 감지) |
 
 직접 수정·신규 추가한 xv6 파일: `kernel/proc.{h,c}`, `kernel/console.c`, `kernel/syscall.{c,h}`, `kernel/sysproc.c`, `kernel/printf.c`, `user/usys.pl`, `user/user.h` + 신규 유저 프로그램(`triage`, `parser`, `classifier`, `rootcause`, `fixsuggest`, `evaluator`, `agentstat`, `setrole`, `priotest`, `procfields`, `proxytest`, `smoketest`, `logstress`).
 
@@ -37,10 +37,13 @@ GuideLine §2가 요구하는 "최소 한 가지, 가능하면 그 이상"의 OS
 ### 4.1 시스템 의존성 (Ubuntu / WSL2 기준)
 
 ```bash
+# 기본 옵션 — Ubuntu/Debian 표준 패키지로 충분 (xv6-src/Makefile L36~50의 폴백이 자동 인식):
 sudo apt-get install -y \
-  gcc-riscv64-unknown-elf gdb-multiarch qemu-system-misc \
+  gcc-riscv64-linux-gnu gdb-multiarch qemu-system-misc \
   make python3 python3-pip
 ```
+
+대안: 별도 elf 툴체인이 이미 깔려 있는 환경(`riscv64-unknown-elf-gcc`, `riscv64-elf-gcc`, `riscv64-none-elf-gcc` 등)이라면 Makefile이 자동 감지해 우선 사용한다. Ubuntu/Debian 공식 apt 저장소에는 `gcc-riscv64-unknown-elf` 패키지가 없으므로 그 이름으로 `apt-get install`을 시도하면 실패한다 — 위 명령(`gcc-riscv64-linux-gnu`)을 사용한다.
 
 QEMU 버전 5.1 이상 필요 (xv6-riscv 빌드 요구사항). `qemu-system-riscv64 --version`으로 확인.
 
@@ -78,13 +81,13 @@ $ priotest             # 우선순위 스케줄러 효과 측정
 
 ```bash
 # mock 모드 (네트워크 없음, autotest 기본):
-python3 host/proxy_daemon.py --mode mock --triage samples/short.log
+python3 host/proxy_daemon.py --mode mock --triage short.log
 
 # replay 모드 (캐시만 사용, 벤치마크 재현):
-python3 host/proxy_daemon.py --mode replay --triage samples/short.log
+python3 host/proxy_daemon.py --mode replay --triage short.log
 
 # live 모드 (실 Upstage API, 시연용):
-python3 host/proxy_daemon.py --mode live --triage samples/short.log
+python3 host/proxy_daemon.py --mode live --triage short.log
 ```
 
 ### C. 자동 테스트 · 회귀 · 벤치마크

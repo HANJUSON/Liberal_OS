@@ -31,6 +31,13 @@ def _collect(path: pathlib.Path) -> dict[str, list[float]]:
             continue
         if not isinstance(data, dict):
             continue
+        # Filter out failed/timeout runs — their elapsed_s reflects the
+        # timeout budget, not the experiment, and would skew the mean.
+        # Runs without an "ok" field (legacy formats) pass through.
+        if data.get("ok") is False:
+            print(f"info: skip non-ok run {jf.name} "
+                  f"(reason={data.get('reason')!r})", file=sys.stderr)
+            continue
         for k, v in data.items():
             if isinstance(v, (int, float)) and not isinstance(v, bool):
                 grouped.setdefault(k, []).append(float(v))

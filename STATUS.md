@@ -104,6 +104,7 @@
 | Tech Report 팀 narrative | `docs/TECHNICAL_REPORT.md` Appendix A LoC + 팀원별 기여 narrative (`PROCESS.md` §6) | 팀원별 작업 내역은 사람만 정확히 앎. | TECHNICAL_REPORT.md 갱신 |
 | `slides/final.pptx` | `slides/draft.md` → pptx 변환 + 디자인 + 발표자 노트 동기화 | 디자인·발표 흐름은 사람 검토 권장. 초벌은 `slides/draft.md`로 완성. | `slides/final.pptx` |
 | GitHub 행정 (GuideLine §1) | repo public 확인, 팀 명단·리더·연락처 시트 제출 | 외부 시스템 (학교 시트). | — |
+| F-01 | xv6 fs를 에이전트 컨텍스트 저장/복구 메커니즘으로 확장 | 코드 양 큰 작업 (새 파일 시스템 콜, evaluator/triage 통합). GuideLine §2 OS 개념 활용 깊이 향상. README §10에 한계로 명시되어 있던 항목 | `xv6-src/kernel/sysfile.c`, `xv6-src/user/`, TECHNICAL_REPORT §3 갱신 |
 
 ---
 
@@ -131,7 +132,27 @@
 
 ---
 
-## 6. Ralph Loop 회차 보강 (T-NN 큐 외 추가 작업)
+## 6. 평가자 피드백 대응 (2026-06-07)
+
+채점자 시뮬레이션 리뷰에서 지적된 항목 검증 및 대응:
+
+| # | 지적 | 검증 결과 | 대응 |
+|---|---|---|---|
+| ① | `make autotest`/`make regression`가 클린 체크아웃에서 fs.img 없어 실패 | 유효 — `xv6-src/Makefile`에 `all` 타깃 없음, 기본은 kernel만 빌드 | `xv6-src/Makefile` L1~L9에 `all: $K/kernel fs.img` 추가. fs.img 삭제 후 `make autotest` PASS 확인 |
+| ② | README §5B `--triage samples/short.log` 인자 오류 (xv6 fs는 `short.log`) | 유효 — `host/proxy_daemon.py:210`이 인자를 xv6 셸에 그대로 전달. xv6 fs는 `mkfs/mkfs fs.img README _short.log $(UPROGS)`로 단일 파일 보유 | README §5B 3건 모두 `--triage short.log`로 정정 |
+| ③ | README §4.1 `gcc-riscv64-unknown-elf` 패키지 Ubuntu apt에 미존재 | 유효 — 실제 빌드는 xv6-src/Makefile L45 `riscv64-linux-gnu-` 폴백 경로 | README §4.1을 `gcc-riscv64-linux-gnu` 우선으로 재작성, elf 툴체인은 대안으로 명시. 표 헤더(L17)도 동기화 |
+| ④ | 모든 측정이 mock 모드 (live 결손) | 유효, 사람 작업 | T-62 (위 §4) — `BENCH_N=5 MODE=live bash bench/run_all.sh` 직접 실행 필요 |
+| ⑤ | speedup 주장에 sequential 베이스라인 부재 | 유효 — `bench/report.py:_section_speedup_model`는 분석 모델만 제공 | `host/proxy_daemon.py`에 `--triage-sequential` 추가 (xv6 셸 `;` + 파일 redirect로 5-stage 직렬). `bench/run_all.sh`에 `[bench 2/3]` sequential 단계 추가. `bench/report.py` §4 신규: 실측 비교 표 + 1.16× 실측 (mock, n=5+5). `bench/summarize.py`는 timeout 런 자동 제외 |
+| ⑥ | fs/storage 활용 얕음 (README §10에 본인들도 인정) | 유효, 대공사 | F-01로 §4 follow-up 등록 |
+
+검증 명령:
+- `rm xv6-src/fs.img && bash tests/autotest.sh` → PASS
+- `BENCH_N=5 BENCH_TIMEOUT=60 bash bench/run_all.sh` → 5+5 모두 OK, `out/REPORT.md` §4 실측 표 갱신
+- `make regression` → 3-gate PASS
+
+---
+
+## 7. Ralph Loop 회차 보강 (T-NN 큐 외 추가 작업)
 
 GuideLine.md 기반 평가 직전 보강 작업. MASTER_PLAN T-NN 큐와 별개로, 산출물 품질 향상 목적.
 
@@ -153,7 +174,7 @@ GuideLine.md 기반 평가 직전 보강 작업. MASTER_PLAN T-NN 큐와 별개�
 
 ---
 
-## 7. 작업 추가 규칙
+## 8. 작업 추가 규칙
 
 새 T-NN을 추가할 때:
 1. 새 Phase면 Phase 번호를 잇는다 (Phase 8, 9...).
@@ -163,14 +184,14 @@ GuideLine.md 기반 평가 직전 보강 작업. MASTER_PLAN T-NN 큐와 별개�
 
 ---
 
-## 8. 정책 메모
+## 9. 정책 메모
 
-### 8.1 통합 결과
+### 9.1 통합 결과
 - `PROGRESS.md`, `BLOCKED.md` → 본 문서로 흡수, 삭제 완료.
 - `MASTER_PLAN.md` / `MASTER_PLAN.en.md` Part II(§11~§20) + §19 진행 현황 요약 → 본 문서로 이전, 설계 SSoT만 남김.
 - `files/` 디렉토리(legacy harness drop-in) → root 소유라 사용자 권한으로 삭제 불가. 사람이 `sudo rm -rf files/` 직접 실행 권장. `.gitignore` 등록되어 있어 repo에는 영향 없음.
 
-### 8.2 남은 dangling 참조 (이번 권한 범위 밖)
+### 9.2 남은 dangling 참조 (이번 권한 범위 밖)
 결정 문서/제출 산출물에 이전 파일·섹션 참조가 남아 있다. 본 정리 작업은 `MASTER_PLAN.md` 본문 수정만 명시 승인 받았으므로 아래는 손대지 않았다 — 사람 판단으로 갱신 필요.
 
 | 파일 | 참조 | 권장 갱신 |
@@ -181,7 +202,7 @@ GuideLine.md 기반 평가 직전 보강 작업. MASTER_PLAN T-NN 큐와 별개�
 | `docs/TECHNICAL_REPORT.md` (`BLOCKED.md` 언급) | `BLOCKED.md` 프로토콜 설명 | 강의 제출물 — 제출 시점 판단 |
 | `slides/draft.md` Slide 16 | `MASTER_PLAN.md Part II` | 강의 제출물 — 제출 시점 판단 |
 
-### 8.3 권한 범위
+### 9.3 권한 범위
 - **이번 정리 대상**: `MASTER_PLAN.md`, `MASTER_PLAN.en.md`, `PROGRESS.md`, `BLOCKED.md`, `files/`.
 - **대상 외**: `CLAUDE.md`, `README.md`, `HARNESS.md`, `docs/TECHNICAL_REPORT.md`, `PROCESS.md`, `slides/draft.md`, `out/REPORT.md`, `GuideLine.md`.
 

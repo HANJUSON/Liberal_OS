@@ -1,22 +1,21 @@
 # Liberal_OS — Evaluation Report
 
-Generated: 2026-05-27T04:37:55+00:00
+Generated: 2026-06-06T15:52:38+00:00
 
-This report covers three measured experiments plus one
-analytical model. All runs use **mock mode** (zero-latency
-LLM responses) so results are deterministic and replayable
-without an Upstage API key. Live-mode numbers require
-`MASTER_PLAN.md` T-62 (human-authorised).
+Four measured experiments plus one analytical model. All runs
+use **mock mode** (zero-latency LLM responses) so results are
+deterministic and replayable without an Upstage API key.
+Live-mode numbers require `STATUS.md` T-62 (human-authorised).
 
 ## §1. E2E mock pipeline (parallel xv6 procs)
 
 | Metric | Mean | Stdev | N |
 |---|---:|---:|---:|
-| elapsed_s | 1.329 | 0.0346 | 3 |
-| eval_fails | 2.0 | 0.0 | 3 |
-| eval_oks | 3.0 | 0.0 | 3 |
-| eval_retries | 6.0 | 0.0 | 3 |
-| evaluator_lines | 5.0 | 0.0 | 3 |
+| elapsed_s | 1.378 | 0.011 | 5 |
+| eval_fails | 2.0 | 0.0 | 5 |
+| eval_oks | 3.0 | 0.0 | 5 |
+| eval_retries | 6.0 | 0.0 | 5 |
+| evaluator_lines | 5.0 | 0.0 | 5 |
 
 Each row aggregates one numeric field across captured runs of
 `python3 host/proxy_daemon.py --mode mock --triage short.log`.
@@ -25,16 +24,16 @@ Each row aggregates one numeric field across captured runs of
 
 | Metric | Value |
 |---|---:|
-| Lines evaluated (total) | 15 |
-| Final pass (`evaluator:OK:`) | 9 |
-| Final fail (`evaluator:FAIL:`, retries exhausted) | 6 |
-| Retry signals issued | 18 |
-| Final pass rate | 60.0% (9/15) |
+| Lines evaluated (total) | 25 |
+| Final pass (`evaluator:OK:`) | 15 |
+| Final fail (`evaluator:FAIL:`, retries exhausted) | 10 |
+| Retry signals issued | 30 |
+| Final pass rate | 60.0% (15/25) |
 
 Retry budget per line: **3** (hard cap in `agent_evaluator.c`).
 
 **Mechanism verification**:
-`retry_signals` (18) = `MAX_RETRIES` (3) × `final_fails` (6) — every failing line exhausted its
+`retry_signals` (30) = `MAX_RETRIES` (3) × `final_fails` (10) — every failing line exhausted its
 budget exactly, and no passing line consumed a retry. The
 `kill` + `sleep/wakeup` Supervisor loop fires correctly and
 the 3-strike cap holds.
@@ -51,7 +50,7 @@ answer; the quality delta belongs in that report.
 | Metric | Value |
 |---|---:|
 | Children forked | 6 |
-| Rho (priority vs finish order) | **-0.943** |
+| Rho (priority vs finish order) | **-1.0** |
 | Wall-clock | 0.061s |
 
 Finish order vs assigned priority (higher = preferred):
@@ -61,8 +60,8 @@ Finish order vs assigned priority (higher = preferred):
 | 0 | 0 | 5 | 0 |
 | 1 | 1 | 4 | 0 |
 | 2 | 2 | 3 | 0 |
-| 3 | 4 | 1 | 0 |
-| 4 | 3 | 2 | 0 |
+| 3 | 3 | 2 | 0 |
+| 4 | 4 | 1 | 0 |
 | 5 | 5 | 0 | 0 |
 
 Spearman ρ near −1.0 confirms our modified `scheduler()` honours
@@ -71,7 +70,29 @@ Tick offsets of 0 mean each child's CPU-bound loop completed
 within a single timer tick — finish ORDER is the meaningful
 signal here, not absolute time.
 
-## §4. Sequential vs parallel speedup (analytical model)
+## §4. Sequential vs parallel — empirical (mock)
+
+| topology | wall-clock mean (s) | stdev (s) | n |
+|---|---|---|---|
+| parallel (`triage`, fork+pipe)  | 1.378 | 0.011 | 5 |
+| sequential (`sh ;` + redirects) | 1.6036 | 0.0419 | 5 |
+
+**Empirical speedup (mock)**: 1.16× (14.1% wall-clock savings).
+
+Both rows execute the same 5-stage pipeline (parser → classifier →
+rootcause → fixsuggest → evaluator) against the same `short.log`
+input; the only variable is whether stages overlap (fork+pipe)
+or fully serialise (shell `;` between file-redirected stages).
+
+Caveat: mock-mode LLM latency `L ≈ 0`, so this ratio reflects
+the xv6 plumbing component only — fork + pipe + scheduler
+overlap vs serialised fork + wait + file I/O. It does **not**
+measure LLM-call parallelism (that requires live mode — see §5).
+The fact that even at L=0 the parallel topology saves ~14%
+wall-clock validates that the fork+pipe chain itself yields real
+overlap of stage work, independent of LLM call duration.
+
+## §5. Sequential vs parallel — analytical projection (live)
 
 Mock mode returns LLM responses instantly (`mock_handler` is
 a pure echo), so empirically measured wall-clock reflects xv6
@@ -88,7 +109,7 @@ parallelism**. Under realistic latency `L` per LLM call:
   speedup       ≈  25 / 9  ≈  2.78×
 ```
 
-Observed parallel mean (mock): **1.329s** — this is
+Observed parallel mean (mock): **1.378s** — this is
 the xv6-overhead floor with `L≈0`. Live-mode `L` of 200–800 ms
 would shift the bottleneck onto LLM latency where the model
 above predicts ≈2.78× speedup over a sequential variant.

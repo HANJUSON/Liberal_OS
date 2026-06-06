@@ -130,12 +130,60 @@ def _section_priotest(prio: dict) -> list[str]:
     return out
 
 
+def _section_speedup_empirical(par_summary: dict,
+                               seq_data: dict | None) -> list[str]:
+    """Empirical sequential vs parallel — same 5 stages, different
+    topology. Sequential = shell ';' + file redirection between stages
+    (each stage runs to completion before next starts). Parallel =
+    `triage` (fork+pipe, all stages concurrent). Mock mode keeps L≈0,
+    so this measures the xv6 plumbing component of the speedup. Live
+    mode would amplify the gap — see §5 analytical projection."""
+    out: list[str] = ["## §4. Sequential vs parallel — empirical (mock)", ""]
+    if seq_data is None or not seq_data.get("ok"):
+        out.append("Sequential baseline missing — re-run bench/run_all.sh.")
+        out.append("")
+        return out
+    seq_summary = seq_data["summary"]
+    par_e = par_summary.get("elapsed_s", {})
+    seq_e = seq_summary.get("elapsed_s", {})
+    par_mean = par_e.get("mean") if isinstance(par_e, dict) else None
+    seq_mean = seq_e.get("mean") if isinstance(seq_e, dict) else None
+    par_n = par_e.get("n", 0) if isinstance(par_e, dict) else 0
+    seq_n = seq_e.get("n", 0) if isinstance(seq_e, dict) else 0
+    if par_mean and seq_mean:
+        ratio = seq_mean / par_mean
+        savings_pct = (1 - par_mean / seq_mean) * 100
+        out.append("| topology | wall-clock mean (s) | stdev (s) | n |")
+        out.append("|---|---|---|---|")
+        out.append(f"| parallel (`triage`, fork+pipe)  | {par_mean} | {par_e.get('stdev')} | {par_n} |")
+        out.append(f"| sequential (`sh ;` + redirects) | {seq_mean} | {seq_e.get('stdev')} | {seq_n} |")
+        out.append("")
+        out.append(f"**Empirical speedup (mock)**: {ratio:.2f}× ({savings_pct:.1f}% wall-clock savings).")
+        out.append("")
+        out.append("Both rows execute the same 5-stage pipeline (parser → classifier →")
+        out.append("rootcause → fixsuggest → evaluator) against the same `short.log`")
+        out.append("input; the only variable is whether stages overlap (fork+pipe)")
+        out.append("or fully serialise (shell `;` between file-redirected stages).")
+        out.append("")
+        out.append("Caveat: mock-mode LLM latency `L ≈ 0`, so this ratio reflects")
+        out.append("the xv6 plumbing component only — fork + pipe + scheduler")
+        out.append("overlap vs serialised fork + wait + file I/O. It does **not**")
+        out.append("measure LLM-call parallelism (that requires live mode — see §5).")
+        out.append(f"The fact that even at L=0 the parallel topology saves ~{savings_pct:.0f}%")
+        out.append("wall-clock validates that the fork+pipe chain itself yields real")
+        out.append("overlap of stage work, independent of LLM call duration.")
+        out.append("")
+    else:
+        out.append("Insufficient samples to compute speedup.")
+        out.append("")
+    return out
+
+
 def _section_speedup_model(summary: dict) -> list[str]:
-    """Analytical sequential vs parallel — mock has zero LLM latency so an
-    empirical seq baseline measures fork+pipe overhead only, which is not
-    the speedup story. We instead model it.
+    """Analytical sequential vs parallel — extrapolates §4 empirical
+    result to live mode where LLM latency `L` dominates the wall-clock.
     """
-    out: list[str] = ["## §4. Sequential vs parallel speedup (analytical model)", ""]
+    out: list[str] = ["## §5. Sequential vs parallel — analytical projection (live)", ""]
 
     n_stages = 5
     n_lines = 5
@@ -174,11 +222,19 @@ def _section_speedup_model(summary: dict) -> list[str]:
 
 
 def render(summary_path: pathlib.Path, prio_path: pathlib.Path | None,
-           bench_dir: pathlib.Path | None) -> str:
+           bench_dir: pathlib.Path | None,
+           seq_summary_path: pathlib.Path | None) -> str:
     data = json.loads(summary_path.read_text())
     if not data.get("ok"):
         return f"# REPORT\n\nsummarize failed: {data!r}\n"
     summary = data["summary"]
+
+    seq_data = None
+    if seq_summary_path is not None and seq_summary_path.exists():
+        try:
+            seq_data = json.loads(seq_summary_path.read_text())
+        except (json.JSONDecodeError, OSError):
+            seq_data = None
 
     ts = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
     lines: list[str] = []
@@ -186,11 +242,10 @@ def render(summary_path: pathlib.Path, prio_path: pathlib.Path | None,
     lines.append("")
     lines.append(f"Generated: {ts}")
     lines.append("")
-    lines.append("This report covers three measured experiments plus one")
-    lines.append("analytical model. All runs use **mock mode** (zero-latency")
-    lines.append("LLM responses) so results are deterministic and replayable")
-    lines.append("without an Upstage API key. Live-mode numbers require")
-    lines.append("`MASTER_PLAN.md` T-62 (human-authorised).")
+    lines.append("Four measured experiments plus one analytical model. All runs")
+    lines.append("use **mock mode** (zero-latency LLM responses) so results are")
+    lines.append("deterministic and replayable without an Upstage API key.")
+    lines.append("Live-mode numbers require `STATUS.md` T-62 (human-authorised).")
     lines.append("")
     lines.extend(_section_e2e(summary))
 
@@ -204,6 +259,7 @@ def render(summary_path: pathlib.Path, prio_path: pathlib.Path | None,
             prio = {}
         lines.extend(_section_priotest(prio))
 
+    lines.extend(_section_speedup_empirical(summary, seq_data))
     lines.extend(_section_speedup_model(summary))
 
     return "\n".join(lines)
@@ -216,11 +272,14 @@ def main() -> int:
                     help="optional priotest JSON path")
     ap.add_argument("--bench-dir", type=pathlib.Path, default=None,
                     help="optional raw e2e bench dir for retry-effect calc")
+    ap.add_argument("--seq-summary", type=pathlib.Path, default=None,
+                    help="optional sequential-baseline summary.json (for §4)")
     args = ap.parse_args()
     if not args.summary.exists():
         print(f"# REPORT\n\nMissing summary: {args.summary}\n")
         return 1
-    sys.stdout.write(render(args.summary, args.priotest, args.bench_dir))
+    sys.stdout.write(render(args.summary, args.priotest, args.bench_dir,
+                            args.seq_summary))
     return 0
 
 

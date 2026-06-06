@@ -1,6 +1,13 @@
 K=kernel
 U=user
 
+# Default target: build both the kernel and the filesystem image.
+# Without this, `make` builds only kernel/kernel and `qemu -drive fs.img`
+# fails on a clean checkout (fs.img is gitignored). autotest.sh and any
+# `make autotest`-style harness call rely on this target.
+all: $K/kernel fs.img
+.PHONY: all
+
 OBJS = \
   $K/entry.o \
   $K/start.o \
