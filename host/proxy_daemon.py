@@ -83,21 +83,31 @@ def mock_handler(role: str, prompt: str) -> str:
 def live_handler(role: str, prompt: str) -> str:
     cached = cache_get(role, prompt)
     if cached is not None:
+        sys.stderr.write(f"[live] {role} CACHE_HIT\n"); sys.stderr.flush()
         return cached
     api_key = os.environ.get("UPSTAGE_API_KEY")
     if not api_key:
         raise RuntimeError("UPSTAGE_API_KEY missing — set it in .env for live mode")
     from openai import OpenAI  # type: ignore[import-not-found]
-    client = OpenAI(api_key=api_key, base_url="https://api.upstage.ai/v1")
-    response = client.chat.completions.create(
-        model="solar-pro",
-        max_tokens=256,
-        messages=[
-            {"role": "system", "content": f"You are the Liberal_OS {role} agent."},
-            {"role": "user", "content": prompt},
-        ],
-    )
-    result = response.choices[0].message.content or ""
+    client = OpenAI(api_key=api_key, base_url="https://api.upstage.ai/v1", timeout=12.0)
+    sys.stderr.write(f"[live] {role} CALL prompt={prompt[:60]!r}\n"); sys.stderr.flush()
+    t0 = time.time()
+    try:
+        response = client.chat.completions.create(
+            model="solar-pro",
+            max_tokens=80,
+            timeout=12.0,
+            messages=[
+                {"role": "system", "content": f"You are the Liberal_OS {role} agent. Respond with at most one short sentence under 120 characters. No newlines, no tabs, no markdown, no preface."},
+                {"role": "user", "content": prompt},
+            ],
+        )
+    except Exception as exc:
+        sys.stderr.write(f"[live] {role} ERROR after {time.time()-t0:.2f}s: {type(exc).__name__}: {exc}\n"); sys.stderr.flush()
+        raise
+    raw = response.choices[0].message.content or ""
+    result = " ".join(raw.split())
+    sys.stderr.write(f"[live] {role} DONE {time.time()-t0:.2f}s -> {result[:60]!r}\n"); sys.stderr.flush()
     cache_put(role, prompt, result)
     return result
 
