@@ -621,14 +621,68 @@ than silently degrading to a fresh API hit.
 These gaps are honest reflections of the time budget rather than
 fundamental design limitations.
 
+### §10.7 Live end-to-end demonstration (2026-06-08)
+
+Single ad-hoc live run captured during the screenshot session
+(`out/screenshots/screenshot2.png`, `out/live-trace.log`):
+
+```
+command: python3 host/proxy_daemon.py --triage-sequential short.log \
+                  --mode live --timeout 240
+result:  ok=true, mode=live, topology=sequential,
+         served={parser:5, classifier:5, rootcause:5,
+                 fixsuggest:5, evaluator:5},
+         eval_oks=5, eval_fails=0, eval_retries=0,
+         missing_roles=[], elapsed_s=15.827
+```
+
+This is **not** a benchmark (`n=1`, sequential topology to dodge
+proxy_lock contention while patches were being verified), but it is
+the first end-to-end evidence that the five-agent xv6 pipeline drives
+real Solar Pro 3 transactions through every stage. The 15.8 s
+wall-clock is ≈11.5× the mock baseline (1.378 s) and matches the
+expected ∑(call latency) ≈ 25 × 0.5 s. Evaluator outputs include
+genuine OS-level recommendations from the model:
+
+```
+evaluator:OK:Adjust `vacuum-time` to set the log retention period.
+evaluator:OK:Use `top` or `htop` to identify resource hogs,
+            then kill non-system processes with `kill -15 <PID>`.
+evaluator:OK:No fix required as the process started successfully.
+```
+
+A formal `BENCH_N=5 MODE=live bash bench/run_all.sh` (T-62) remains
+human-authorised; this run only validates that the live path is
+unblocked end-to-end. The cache populated by this run lives in
+`.cache/llm/` (25 entries) and turns subsequent `--mode replay` runs
+into instant (~1.5 s) demos.
+
+**Implementation incidentals fixed in this run** (see PROCESS.md I-11):
+1. The model occasionally embedded `\n` / `\t` in its responses,
+   which the line-framed PROXY_RES grammar cannot tolerate. The
+   handler now collapses all whitespace via `" ".join(raw.split())`
+   and the system prompt explicitly forbids newlines/tabs/markdown.
+2. `max_tokens` lowered from 256 to 80 — Upstage was occasionally
+   spending tens of seconds on long replies that the agents would
+   truncate anyway.
+3. Per-request `timeout=12.0 s` so one slow call cannot starve the
+   180–240 s harness budget.
+4. A stderr trace (`[live] <role> CALL/DONE`) was added for
+   diagnosis and is shown in `out/screenshots/screenshot3.png`.
+
 ---
 
 ## §11. Limitations and Known Trade-offs
 
-* **Input echo is permanently disabled.** Interactive xv6 shell users
-  no longer see the characters they type. The harness drives the
-  shell programmatically so this is invisible in the demo, but a
-  human-operated session feels broken.
+* **Input echo trade-off** (revised 2026-06-08, see PROCESS.md I-10).
+  T-30+ originally disabled `consputc(c)` in `consoleintr()` because
+  echoed keystrokes could interleave with concurrent `PROXY_RES`
+  bytes on the UART. For the screenshot/demo session echo was
+  **re-enabled** — when the agent pipeline runs non-interactively
+  there are no human keystrokes, so the original race window does
+  not open. Interactive users now see what they type. The harness
+  still drives the shell programmatically in `make autotest` /
+  `make regression`, so this change is invisible to the gates.
 * **`proxy_call` is globally serialised** via the kernel sleeplock.
   Five agents cannot truly run their host roundtrips in parallel.
   Removing this serialisation would require either a per-agent host
@@ -735,7 +789,7 @@ Final values land in `PROCESS.md` §5 alongside the wall-clock budget.
 ## Appendix B — How to reproduce
 
 ```bash
-# 1. install build deps (Ubuntu 24.04+)
+# 1. install build deps (Ubuntu 24.04+ / WSL2)
 sudo apt install -y build-essential gdb-multiarch qemu-system-misc \\
                     gcc-riscv64-linux-gnu binutils-riscv64-linux-gnu python3
 
@@ -743,20 +797,38 @@ sudo apt install -y build-essential gdb-multiarch qemu-system-misc \\
 git clone <team-repo-URL> Liberal_OS
 cd Liberal_OS
 
-# 3. mock-mode automated gates
+# 3. Python deps under venv (PEP 668 on recent Ubuntu blocks system pip)
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -r host/requirements.txt
+
+# 4. mock-mode automated gates
 make regression          # ~12s — boot + smoke + shell + proxy hello
 bash tests/e2e_mock.sh   # ~1s  — five-agent triage end-to-end
 BENCH_N=5 bash bench/run_all.sh   # produces out/REPORT.md
 
-# 4. live mode (requires Upstage API key)
+# 5. live mode (requires Upstage API key in .env)
 cp .env.example .env  # paste UPSTAGE_API_KEY from the instructor
-python3 host/proxy_daemon.py --mode live --triage short.log
+MODE=live python3 host/hello_upstage.py            # single-call smoke
+# 25-call pipeline (sequential topology + extended timeout):
+python3 host/proxy_daemon.py --triage-sequential short.log \\
+        --mode live --timeout 240 2> out/live-trace.log
+# After the first live run, replay is instant:
+python3 host/proxy_daemon.py --mode replay --triage short.log
 
-# 5. interactive demo
+# 6. interactive demo
 cd xv6-src && make qemu
-$ triage short.log
 $ agentstat
+$ triage short.log    # standalone: emits PROXY_REQ frames then hangs
+                      # waiting on the host daemon. Expected.
 $ priotest
+```
+
+If `qemu: Failed to get "write" lock` appears, a zombie QEMU is
+still holding `fs.img`:
+```bash
+ps -fu "$USER" | grep qemu-system-riscv64 | grep -v grep
+# kill only your own PIDs
 ```
 
 ---

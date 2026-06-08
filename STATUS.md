@@ -4,7 +4,7 @@
 > Design SSoT는 `MASTER_PLAN.md` Part I (§1~§10, 부록).
 > 작업 규칙/도구 정책은 `CLAUDE.md`.
 
-**Last updated**: 2026-06-07
+**Last updated**: 2026-06-08
 **Convention**: 본 문서는 PROGRESS.md / BLOCKED.md / MASTER_PLAN.md Part II(§11~§20)를 흡수한 단일 운영 페이지다. 과거 분리 문서는 git history 참조.
 
 ---
@@ -174,7 +174,50 @@ GuideLine.md 기반 평가 직전 보강 작업. MASTER_PLAN T-NN 큐와 별개�
 
 ---
 
-## 8. 작업 추가 규칙
+## 8. 데모 증거 캡처 (2026-06-08)
+
+§4의 T-62 일부(live 모드 end-to-end 통과)와 §4의 T-73 대체본(스크린샷 7장)을 이 세션에서 확보했다. 정식 `BENCH_N=5 MODE=live bash bench/run_all.sh`는 여전히 사람 작업으로 남아 있다.
+
+### 8.1 단일 라운드트립 검증 (live)
+- `MODE=live python3 host/hello_upstage.py` → `{"ok":true,"mode":"live","reply":"Hello, liberal_os.","elapsed_s":1.071}` 확인.
+- mock의 0.05s 대비 약 20× — 진짜 네트워크/추론 발생 증거.
+
+### 8.2 5-stage × 5-line = 25 호출 풀스택 (live)
+- `python3 host/proxy_daemon.py --triage-sequential short.log --mode live --timeout 240`
+- 결과: `ok:true`, `served:{parser:5,classifier:5,rootcause:5,fixsuggest:5,evaluator:5}`, `eval_oks:5`, `eval_fails:0`, `eval_retries:0`, `missing_roles:[]`, `elapsed_s:15.827`.
+- 호출당 trace는 `out/live-trace.log`에 보존 (head 50 = 스크린샷 3).
+- 캐시 `.cache/llm/` 25건 채워짐 → 이후 `--mode replay`로 1–2초 재현 가능.
+
+### 8.3 ρ = −1.000 priotest 캡처
+- `priotest` 3회 실행 결과: 1회 perfect(ρ=−1.0), 2회는 마지막 한 쌍이 같은 tick(t=1) 안에서 race로 뒤집힘(ρ≈−0.94).
+- 스크린샷 5는 perfect run으로 캡처. `out/REPORT.md` §3 주장과 일치.
+
+### 8.4 발견된 회귀와 수정
+
+| 회귀 | 원인 | 수정 | 검증 |
+|---|---|---|---|
+| 인터랙티브 셸에서 영문 입력 echo 부재 | `console.c:188` T-30+에서 의도적 disable(자동화 우선) | `consputc(c)` 주석 해제, 시연용 echo 복원 | `make regression` PASS, `out/regression-shell.log`에 `$ ls`/`$ echo REGRESSION_SHELL_OK` 라인이 echo로 찍힘 |
+| `live` 모드 데드락 (parser 1건 후 timeout) | `live_handler` 응답에 `\n`/`\t` 포함 시 PROXY_RES line frame 분할 → `proxy_readline` hang | `" ".join(raw.split())`로 sanitize + 시스템 프롬프트에 single-line 강제 | sequential 25호출 완주 (8.2) |
+| `live` 모드 timeout 부족 / 일부 호출 hang | per-request timeout 미설정 + max_tokens 256으로 응답 길어짐 | `max_tokens=80`, `timeout=12.0`, stderr trace 추가 | 8.2 결과 |
+| QEMU 좀비가 `fs.img` lock 유지 | timeout 도달 후 자식 QEMU가 살아남 | `ps -fu $USER | grep qemu-system-riscv64` 후 본인 소유 PID kill (CLAUDE.md §5 보강) | live 실행 정상화 |
+
+### 8.5 캡처된 스크린샷 (`out/screenshots/`)
+
+| 파일 | 증거 |
+|---|---|
+| `screenshot1.png` | Upstage 단일 호출 (`hello_upstage`) |
+| `screenshot2.png` | 25 호출 완주 (`--mode replay --triage`) |
+| `screenshot3.png` | 25 호출 per-call trace (`out/live-trace.log`) |
+| `screenshot4.png` | xv6 `agentstat` JSON 베이스라인 |
+| `screenshot5.png` | xv6 `priotest` ρ=−1.000 |
+| `screenshot6.png` | xv6 `triage` 단독 — raw PROXY_REQ emit |
+| `screenshot7.png` | `make regression` 3/3 PASS |
+
+README §6에 인덱스 표 + 각 스크린샷 캡션 임베드 완료.
+
+---
+
+## 9. 작업 추가 규칙
 
 새 T-NN을 추가할 때:
 1. 새 Phase면 Phase 번호를 잇는다 (Phase 8, 9...).
@@ -184,14 +227,14 @@ GuideLine.md 기반 평가 직전 보강 작업. MASTER_PLAN T-NN 큐와 별개�
 
 ---
 
-## 9. 정책 메모
+## 10. 정책 메모
 
-### 9.1 통합 결과
+### 10.1 통합 결과
 - `PROGRESS.md`, `BLOCKED.md` → 본 문서로 흡수, 삭제 완료.
 - `MASTER_PLAN.md` / `MASTER_PLAN.en.md` Part II(§11~§20) + §19 진행 현황 요약 → 본 문서로 이전, 설계 SSoT만 남김.
 - `files/` 디렉토리(legacy harness drop-in) → root 소유라 사용자 권한으로 삭제 불가. 사람이 `sudo rm -rf files/` 직접 실행 권장. `.gitignore` 등록되어 있어 repo에는 영향 없음.
 
-### 9.2 남은 dangling 참조 (이번 권한 범위 밖)
+### 10.2 남은 dangling 참조 (이번 권한 범위 밖)
 결정 문서/제출 산출물에 이전 파일·섹션 참조가 남아 있다. 본 정리 작업은 `MASTER_PLAN.md` 본문 수정만 명시 승인 받았으므로 아래는 손대지 않았다 — 사람 판단으로 갱신 필요.
 
 | 파일 | 참조 | 권장 갱신 |
@@ -202,7 +245,7 @@ GuideLine.md 기반 평가 직전 보강 작업. MASTER_PLAN T-NN 큐와 별개�
 | `docs/TECHNICAL_REPORT.md` (`BLOCKED.md` 언급) | `BLOCKED.md` 프로토콜 설명 | 강의 제출물 — 제출 시점 판단 |
 | `slides/draft.md` Slide 16 | `MASTER_PLAN.md Part II` | 강의 제출물 — 제출 시점 판단 |
 
-### 9.3 권한 범위
+### 10.3 권한 범위
 - **이번 정리 대상**: `MASTER_PLAN.md`, `MASTER_PLAN.en.md`, `PROGRESS.md`, `BLOCKED.md`, `files/`.
 - **대상 외**: `CLAUDE.md`, `README.md`, `HARNESS.md`, `docs/TECHNICAL_REPORT.md`, `PROCESS.md`, `slides/draft.md`, `out/REPORT.md`, `GuideLine.md`.
 

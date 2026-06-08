@@ -217,6 +217,24 @@
 - **증상**: 한글 `ImplementationPlan.md`와 영문 `ImplementationPlan.en.md`를 동시에 유지하는 부담.
 - **해결**: 두 문서를 `MASTER_PLAN.md` / `MASTER_PLAN.en.md`로 흡수. 결정·실행·일정을 한 파일에 묶고, 영문판은 번역으로만 관리. (`9196440`, `865d1f1`)
 
+### I-10 — Console echo 부재로 시연 키 입력이 화면에 안 보임 (Resolved 2026-06-08)
+- **증상**: `make qemu` 진입 후 xv6 셸에서 영문 키를 쳐도 화면에 echo되지 않음. Enter 후 "exec d failed" 같이 받은 명령은 실행되나 사용자는 자신이 무엇을 친 줄 모름.
+- **원인**: T-30+에서 의도적으로 `console.c:188`의 `consputc(c)` 호출을 주석 처리. 인터럽트 컨텍스트에서 echo한 바이트가 동시에 UART로 나가는 `PROXY_RES` 바이트와 인터리브되어 프레임을 깰 수 있다는 우려. 자동화 우선 정책 하에선 합리적이었으나 시연·스크린샷에는 부적합.
+- **해결**: `console.c:188`의 `consputc(c);` 주석 해제, 주석을 "Re-enabled for interactive demo/screenshot capture"로 갱신. `make regression` 통과 + `out/regression-shell.log`에 `$ ls` / `$ echo REGRESSION_SHELL_OK` 입력 라인이 echo로 찍히는 것 확인. agent 파이프라인 자동 실행 시엔 사람 키보드 입력이 없으므로 trade-off 무영향.
+- **TECHNICAL_REPORT.md** §11(Limitations) 갱신.
+
+### I-11 — Live PROXY_RES 멀티라인 응답으로 인한 데드락 (Resolved 2026-06-08)
+- **증상**: `--mode live` 실행 시 `served:{"parser":1}`에서 멈춤(`reason:"timeout"`). xv6 측 `proxy_readline`은 sleep, 호스트 측 daemon은 다음 `PROXY_REQ`를 기다리며 sleep — 양쪽 대기.
+- **원인**: `host/proxy_daemon.py:live_handler`가 Solar Pro 3 응답을 raw로 반환. PROXY_RES 프레임은 line-framed (`PROXY_RES\t<id>\t<result>\n`)인데 응답에 `\n`이나 `\t`가 섞이면 프레임이 분할되어 xv6의 single-line `proxy_readline`이 첫 줄만 받고 나머지를 받을 방법 없음. Mock에선 `mock_handler`가 pure echo라 노출되지 않았고, live에서만 발생.
+- **해결**:
+  1. 응답 sanitize: `result = " ".join((response.choices[0].message.content or "").split())` — 모든 whitespace를 단일 스페이스로 압축.
+  2. 시스템 프롬프트 강화: `"... Respond with at most one short sentence under 120 characters. No newlines, no tabs, no markdown, no preface."`
+  3. `max_tokens: 256 → 80`로 응답 길이 제한.
+  4. per-request `timeout=12.0` 추가 — 한 호출이 hang해도 다른 호출을 막지 않음.
+  5. stderr 진단 trace 추가: `[live] <role> CALL/DONE` 형식. `out/live-trace.log`에 저장.
+- **검증**: `--triage-sequential short.log --mode live --timeout 240` → `ok:true`, `served:{5,5,5,5,5}`, `eval_oks:5`, `elapsed_s:15.827s`. Solar의 실제 OS-수준 권고(`top`, `htop`, `kill -15`, `journalctl --vacuum-time`)가 evaluator 단계에 도달.
+- **부수 발견**: `live_handler`의 cache가 sanitize 결과를 저장하므로 한 번 live 통과 후엔 `--mode replay`로 1–2초 재현 가능. 시연 안정성 ↑.
+
 ---
 
 ## 5. 도구·하네스 운영 회고

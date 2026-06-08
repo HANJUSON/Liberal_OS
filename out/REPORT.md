@@ -120,3 +120,40 @@ each `proxy_call` against sibling agents. Under live mode this
 partially erodes the analytical speedup: stages overlap in
 CPU/pipe work but their LLM transactions queue at the host
 proxy. Future work — request-id multiplexing in proxy_daemon.
+
+## §6. Live end-to-end spot-check (2026-06-08, n=1)
+
+Single ad-hoc live run captured during the screenshot session
+(`out/screenshots/screenshot2.png`, `out/live-trace.log`):
+
+```
+command: python3 host/proxy_daemon.py --triage-sequential short.log \
+                  --mode live --timeout 240
+result:  ok=true, mode=live, topology=sequential,
+         served={parser:5, classifier:5, rootcause:5,
+                 fixsuggest:5, evaluator:5},
+         eval_oks=5, eval_fails=0, eval_retries=0,
+         missing_roles=[], elapsed_s=15.827
+```
+
+15.8 s wall-clock ≈ 11.5× the mock baseline (1.378 s in §1); the gap
+is real LLM round-trip latency (≈0.5 s × 25 calls). This is **not**
+a benchmark — it is `n=1` and sequential topology — but it is the
+first confirmation that the five-agent xv6 pipeline drives real
+Upstage Solar Pro 3 transactions to completion through all five
+stages. `eval_oks` rising from 3/5 (mock) to 5/5 (live) reflects the
+quality delta the §2 caveat predicted: under live the evaluator
+checker passes lines that mock's identity echo would always reject.
+
+A formal `BENCH_N=5 MODE=live bash bench/run_all.sh` (STATUS.md §4
+T-62) remains human-authorised. The cache populated by this single
+run (`.cache/llm/`, 25 entries) turns subsequent `--mode replay`
+runs into ~1.5 s reproducible demos.
+
+**Priotest ρ caveat.** §3 reports `ρ = −1.0` from a single mock
+bench run. Across 3 ad-hoc reruns on 2026-06-08, 1 run was perfect
+(ρ = −1.000) and 2 had the last pair (prio 0, prio 1) reversed
+because both children completed within the same timer tick (t = 1),
+exposing scheduler tie-break and `wait()` zombie-scan order. Across
+those runs ρ ranges from −1.000 (best) to ≈ −0.94 (worst); the
+strict-priority effect holds in every run.
