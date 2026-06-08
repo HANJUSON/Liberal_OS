@@ -180,12 +180,11 @@ consoleintr(int c)
     if(c != 0 && cons.e-cons.r < INPUT_BUF_SIZE){
       c = (c == '\r') ? '\n' : c;
 
-      // Liberal_OS T-30+: input echo intentionally disabled. Echoing
-      // every keystroke mixed host-side PROXY_RES bytes back into the
-      // UART output stream and corrupted concurrent agent writes.
-      // The trade-off is interactive shell users no longer see what
-      // they type — acceptable for an automation-first harness.
-      //   consputc(c);
+      // Liberal_OS T-30+: echo was previously disabled because it could
+      // interleave with concurrent agent PROXY_RES bytes on the UART.
+      // Re-enabled for interactive demo/screenshot capture — when running
+      // the agent pipeline non-interactively, echo is moot (no human keys).
+      consputc(c);
 
       // store for consumption by consoleread().
       cons.buf[cons.e++ % INPUT_BUF_SIZE] = c;
