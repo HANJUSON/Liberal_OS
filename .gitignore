@@ -7,13 +7,17 @@
 # LLM response cache
 .cache/llm/
 
-# Outputs and bench results — ignore everything except REPORT.md.
+# Outputs and bench results — ignore everything except tracked deliverables.
 # REPORT.md is a tracked deliverable (GuideLine §5 #2, referenced by
 # README.md §8 and MASTER_PLAN.md §8). bench/run_all.sh regenerates it;
 # commit when results change. Re-include only works if the parent dir
 # itself isn't ignored, so we use `out/*` not `out/`.
+# Demo screenshots (README §6) and the live-mode trace log are also
+# tracked artifacts — they back the §6 figures and TECHNICAL_REPORT §10.7.
 out/*
 !out/REPORT.md
+!out/screenshots/
+!out/live-trace.log
 
 # Build artifacts (xv6)
 xv6-src/kernel/*.o
