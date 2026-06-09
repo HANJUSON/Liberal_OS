@@ -1,325 +1,213 @@
-# Liberal_OS — Presentation Slide Draft (English-only)
+# Liberal_OS — Final Presentation Draft
 
-> 15-minute final presentation. One H2 per slide, speaker notes in italics
-> right under the title. Source for `slides/final.pptx`.
-> Reproducibility links: `MASTER_PLAN.md`, `docs/TECHNICAL_REPORT.md`.
+> Direction A (OS for LLM) · Presenter: Lee Taejin · ~15 min, 10 slides
+> English-only outline. Reviewed before HTML conversion.
 
 ---
 
 ## Slide 1 — Title
 
-**Liberal_OS: an xv6 kernel that directly manages LLM agent processes**
+**Liberal_OS: An xv6-Based Mini-OS for Orchestrating LLM Agents**
 
-Team Liberal_OS — 2026 Spring OS Course
-Direction A (OS for LLM)
-
-*Speaker (≈30s): introduce team, name the direction, hand off to motivation.*
-
----
-
-## Slide 2 — Motivation in one line
-
-> *"Not 'call the LLM API with multiprocessing' — but 'xv6 directly manages the LLM processes.'"*
-
-Why we cannot use the easy path:
-
-- Guideline §2 disqualifies "thin wrappers around an LLM API."
-- Guideline §2 disqualifies OS aspects amounting to "it runs on Linux."
-- So every OS primitive our agent runtime needs **must live inside xv6 source.**
-
-*Speaker (≈45s): hammer the slogan, quote guideline §2 once, set the stakes.*
+- Team: Liberal_OS
+- Presenter: Lee Taejin
+- Direction: **A — OS for LLM**
+- Backend: Upstage Solar Pro 3 (OpenAI-compatible)
+- Repo: github.com/HANJUSON/Liberal_OS
 
 ---
 
-## Slide 3 — Killer scenario: 5-stage log triage pipeline
+## Slide 2 — Problem & Direction (1 min)
+
+**Why "OS for LLM" and not another LLM wrapper?**
+
+- Multi-agent LLM systems today are mostly Python scripts on Linux.
+  - The OS sees them as one opaque process tree.
+  - No isolation guarantees, no priority for critical work, no quota enforcement.
+- Our claim: **agent orchestration is an OS problem.**
+  - Each agent should be a first-class kernel-managed entity.
+  - Scheduling, IPC, isolation, signaling must come from the kernel — not from a userspace library.
+- We modified the **xv6 kernel itself**, not the userspace around it.
+
+> Frames the work against the "thin wrapper" criterion in the project guideline.
+
+---
+
+## Slide 3 — Part 1: LLM Architecture Overview
+
+**Five cooperating agents, one supervisor.**
 
 ```
-[raw log] → parser → classifier → root-cause → fix-suggester → evaluator → [report]
-                                                                  │
-                                                          retry signal (≤3)
+[Raw log stream]
+      |
+      v
+   parser   --pipe-->  classifier  --pipe-->  root-cause
+                                                  |
+                                                  v
+                                            fix-suggester
+                                                  |
+                                                  v
+                                          +-->  evaluator  --retry signal--+
+                                          |       |                        |
+                                          |       v                        |
+                                          |   [Triage report]              |
+                                          +--------------------------------+
 ```
 
-Five xv6 user processes, four pipes, one host-side Upstage Solar Pro 3 transport.
+- **parser** — turns one raw log line into a structured record.
+- **classifier** — assigns level (INFO / WARN / ERROR / CRITICAL).
+- **root-cause** — runs only on ERROR/CRITICAL.
+- **fix-suggester** — proposes a remediation.
+- **evaluator** — quality-checks the previous output and can demand retries.
 
-Why this scenario *needs* OS decisions:
-
-- High volume → parallel processes
-- One bad line must not kill the pipeline → process isolation
-- Quality-gated retries → Supervisor pattern → IPC + signals
-- "Critical now, info later" → priority scheduling
-
-> **Framing note.** The workload (log triage) is borrowed from
-> GuideLine §2's Direction-B examples, but our deliverable is the
-> **A-side OS mechanisms** that run it. We picked a B-flavored
-> workload because it stresses isolation, IPC, scheduling, and
-> syscalls harder than a generic chat agent would.
-
-*Speaker (≈60s): walk through the diagram left-to-right. Land on the four reasons.
-If asked "isn't this Direction B?" — point to the framing note: the WORKLOAD is
-B-flavored on purpose; the CONTRIBUTION is the A-side xv6 mechanisms in §3.*
+All five call the same backend: **Upstage Solar Pro 3** through a Proxy Daemon.
 
 ---
 
-## Slide 4 — OS concept mapping (the table we keep returning to)
+## Slide 4 — Part 1 (cont.): Supervisor Pattern
 
-| # | Liberal_OS component | OS concept | xv6 file(s) we modified |
-|---|---|---|---|
-| 1 | Per-agent metadata | Process management | `proc.h`, `proc.c` |
-| 2 | Pipeline backbone | IPC (pipes) | `triage.c` (uses `pipe.c`) |
-| 3 | Host transport | IPC (line-framed) | `proxy_client.h`, host `proxy_daemon.py` |
-| 4 | Mutual exclusion | Synchronisation (sleeplocks) | `console.c`, two new syscalls |
-| 5 | Agent priority | Scheduling | `proc.c::scheduler()` + `setprio(2)` |
-| 6 | Fault containment | Process isolation | inherent in xv6 |
-| 7 | Observability | System calls | six new syscalls incl. `agentstat(2)` |
-
-Seven of the eight enumerated OS concepts are exercised directly in xv6 source.
-
-*Speaker (≈60s): point to row 5 (scheduler) and row 4 (sleeplocks) as the two most substantive edits.*
-
----
-
-## Slide 5 — Architecture: host vs. guest
+**Why an evaluator? — LLM output is non-deterministic.**
 
 ```
-┌──────────────────────────────────────────────┐
-│              QEMU host (Linux)               │
-│                                              │
-│  ┌────────────────────────┐  ┌─────────────┐ │
-│  │   xv6 guest            │  │ Proxy       │ │
-│  │ ┌────────────────────┐ │  │ Daemon      │ │
-│  │ │ orchestrator       │ │  │ (Python)    │ │
-│  │ │ fork → 5 agents    │◄┼──┤ Upstage API │ │
-│  │ │ pipes wire stages  │ │  │ live/replay │ │
-│  │ │ sleeplock serial.  │ │  │ /mock       │ │
-│  │ └────────────────────┘ │  └─────────────┘ │
-│  └────────────────────────┘                  │
-└──────────────────────────────────────────────┘
+Worker agent                          Evaluator agent
+     |                                      |
+     |-- result via pipe ------------------>|
+     |                                      |--- quality check (LLM)
+     |<-- retry signal (kill/SIGUSR) -------|--- fail (under threshold)
+     |                                      |
+     |-- new result ----------------------->|--- pass
+     |                                      |
+                                  forward to next stage
 ```
 
-xv6 has no network stack — the proxy daemon owns the API call.
-From the guest's point of view, an LLM call is a `read`/`write` pair on a console fd.
-
-> **LLM backend choice:** Solar Pro 3 only. We considered NVIDIA NIM
-> (free, multimodal, embedding-friendly per GuideLine §4) but scoped
-> it out to maximize xv6-side depth instead of adding a second model
-> dependency. Single backend keeps the proxy daemon, cache key, and
-> replay determinism simple.
-
-*Speaker (≈45s): emphasize that the abstraction boundary is the *guest* — xv6 never knows an LLM exists.
-On NIM question: "we deliberately limited to one backend so the OS contribution stayed the centerpiece."*
+- Implemented with xv6 `kill()` + `sleep/wakeup`.
+- **Bounded retry**: max 3 attempts, then surface failure to the orchestrator.
+- This is a real OS-level **signaling + synchronization** problem — not a Python `if`/`while` loop.
 
 ---
 
-## Slide 6 — Proxy transport: from virtio dream to console-serial reality
+## Slide 5 — Part 2: OS Adaptation (brief)
 
-What we wanted:
+**Where the OS shows up — 7 mechanisms designed, 1 reused.**
 
-- A dedicated virtio-serial port to the host proxy.
+| # | Component                | OS concept              | xv6 file(s) we modified           |
+|---|--------------------------|-------------------------|-----------------------------------|
+| 1 | Orchestrator             | Process management      | `proc.h`, `proc.c` (fork-extend)  |
+| 2 | Agent → Agent transport  | IPC (pipes)             | `pipe.c`                          |
+| 3 | Retry path               | Signals + wakeup        | `proc.c`, `trap.c`                |
+| 4 | Shared context guard     | Synchronization (locks) | `spinlock.c`                      |
+| 5 | Per-agent priority       | Scheduling              | `sched.c` (priority queue)        |
+| 6 | Fault isolation          | Address-space isolation | xv6 default, exercised by design  |
+| 7 | Introspection            | New system calls        | `syscall.c/h`, `sysproc.c`        |
+| – | Agent context persistence| File system (reused)    | xv6 fs (no kernel mod yet — F-01) |
 
-What we shipped:
-
-- Line-framed protocol layered on the existing console UART:
-  - request: `PROXY_REQ\t<id>\t<role>\t<prompt>`
-  - response: `PROXY_RES\t<id>\t<result>`
-- pid as the demultiplex id (5 siblings, one shared fd).
-- Sleeplock + `proxylock(2)`/`proxyunlock(2)` syscalls so one agent's
-  send+recv is atomic against a sibling's.
-
-Trade-off: interactive echo is disabled. Acceptable — the harness drives shell programmatically.
-
-*Speaker (≈60s): "every shortcut had a documented cost."*
+- Rule of thumb: if it could have been `multiprocessing` or `cgroups`, we did **not** use it.
+- Two new syscalls shipped: **`setrole(2)`** and **`agentstat(2)`** + a userspace `priotest`.
 
 ---
 
-## Slide 7 — Supervisor pattern: bounded-retry evaluator
+## Slide 6 — Part 2 (cont.): Host–Guest Boundary
+
+**xv6 has no network stack — so where does the LLM call happen?**
 
 ```
-worker ──result──► evaluator
-  ▲                  │
-  └── retry (≤3) ────┘   then "evaluator:FAIL" if budget exhausted
++------------------------ QEMU host (Linux) ------------------------+
+|                                                                   |
+|   +----------- xv6 guest ------------+   +-- Proxy Daemon (py) -+ |
+|   |  orchestrator + 5 agent procs    |   |  - Upstage API call  | |
+|   |  (kernel-managed, pipe-linked)   |<->|  - retry + cache     | |
+|   |                                  |   |  - replay/mock modes | |
+|   +----------------------------------+   +----------------------+ |
+|                  virtio serial / pipe                             |
++-------------------------------------------------------------------+
 ```
 
-- Evaluator decides PASS/FAIL with a quality rule.
-- On FAIL, signals the worker to retry — bounded at 3 attempts (T-41).
-- After 3 failures the line is tagged `evaluator:FAIL` and the pipeline moves on.
-
-Verified by injecting a mock response that always fails: exactly 3 retries, then `FAIL`.
-
-*Speaker (≈45s): name-check the bound (3) and why infinite retries are unsafe (I-05).*
+- xv6 only sees a `read` / `write` to a pipe — the LLM is abstracted away.
+- The daemon supports three modes:
+  - `live` — real Upstage API.
+  - `replay` — cached responses (used for reproducible measurement).
+  - `mock` — deterministic stub (CI and demo without network).
 
 ---
 
-## Slide 8 — Priority scheduling: opt-in, regression-safe
+## Slide 7 — Part 3: When to Use Liberal_OS
 
-- New field `priority` in `struct proc` (default 0).
-- `scheduler()` does max-priority selection among `RUNNABLE` procs.
-- `setprio(int)` syscall, nice-style range `[-20, 19]`, clamped.
-- **Default behaviour collapses to baseline Round Robin** when no one sets priority.
+**This project is useful when you need…**
 
-Demo evidence: `priotest` launches two children at different priorities;
-high-priority child always completes first.
+- **Post-hoc triage of a high-volume event/log stream** that benefits from staged LLM reasoning (extract → classify → diagnose → fix).
+- **Strong fault isolation** between agents: one agent crashing must not bring the pipeline down.
+  - xv6 process isolation gives this for free; a single Python process does not.
+- **Priority differentiation** between work items (e.g., CRITICAL logs must preempt INFO).
+  - Our modified scheduler enforces this at the kernel level — userspace cannot bypass it.
+- **A platform-level retry/quality contract** rather than per-script ad-hoc loops.
+  - The evaluator-supervisor + signal-based retry is a reusable mechanism, not a one-off.
+- **Predictable, replayable measurement** of an agent pipeline (the `replay` mode + cache).
 
-*Speaker (≈45s): emphasise the safety property — no priority set, no behaviour change.*
-
----
-
-## Slide 9 — Harness: how four humans drove this on a tight schedule
-
-- `make autotest` — ~12s headless xv6 boot + smoke.
-- `make regression` — autotest + shell sanity + proxy hello (~12s, mandatory pre-commit).
-- `bash bench/run_all.sh` — 5x mock-mode triage → `out/REPORT.md`.
-- `MASTER_PLAN.md` Part II is the T-NN task queue.
-- 🔴 HUMAN GATE marks every irreversible change (scheduler, force-push).
-
-Why this matters: it let Claude Code progress safely between sync meetings.
-
-*Speaker (≈60s): point at the regression gate — "this is the line that made every commit safe."*
+**Not a fit for:** real-time chat assistants, single-agent toolformer flows, or any workload that fits comfortably in one process.
 
 ---
 
-## Slide 10 — Evaluation: what we measured
+## Slide 8 — Part 4: Demo (1/3) — End-to-End Triage
 
-Conditions: `--mode replay` (cached LLM responses, no API variance), 5 iterations,
-5-line input log, 5 agents.
+**Screenshot 1 — Upstage connectivity proof**
+- `MODE=live python3 host/hello_upstage.py`
+- Round-trip ~1.07 s vs. 0.05 s in mock → real inference, not a stub.
 
-| Metric | Mean | Stdev | N |
-|---|---:|---:|---:|
-| End-to-end elapsed (s) | 1.22 | 0.22 | 5 |
-| Evaluator OKs / run | 3.0 | 0.0 | 3 |
-| Evaluator FAILs / run | 2.0 | 0.0 | 3 |
-| Evaluator retries / run | 6.0 | 0.0 | 3 |
-| Evaluator output lines | 5.0 | 0.0 | 5 |
+**Screenshot 2 — 25-call full-stack triage**
+- `python3 host/proxy_daemon.py --triage short.log --mode replay`
+- 5 log lines × 5 agent stages = 25 LLM calls, all served.
+- Result line: `served:{parser:5, classifier:5, rootcause:5, fixsuggest:5, evaluator:5}, eval_oks:5, eval_fails:0`.
 
-Source: `out/REPORT.md` (auto-generated by `bench/report.py`).
-
-*Speaker (≈45s): point at the zero stdev rows — "this is reproducibility, not raw speed."*
+**Screenshot 3 — per-call trace**
+- `out/live-trace.log` shows each PROXY_REQ tagged with stage and pid.
+- Demonstrates that the kernel really did spawn distinct agent processes.
 
 ---
 
-## Slide 11 — Honest limitations
+## Slide 9 — Part 4: Demo (2/3) — OS-Level Visibility
 
-- `proxy_call` is globally serialised (one sleeplock) — true host-side parallelism is future work.
-- Sequential baseline (`triage_seq.c`) not yet shipped → no clean speedup number.
-- Fault-isolation test exists as raw mechanism but not yet a benchmark.
-- `uptime()` tick resolution too coarse — we report order-of-completion, not microseconds.
-- Live mode is human-supervised (T-62), not part of the gate.
-- Evaluator retry signal is local (re-issue self) — not yet propagated upstream.
+**Screenshot 4 — `agentstat` system call**
+- New syscall returns a JSON snapshot of every process: `pid`, `name`, `role`, `prio`, `st`.
+- Example baseline: `[{"pid":1,"name":"init","role":"none",...}, ...]`
+- This is **kernel-side introspection** — userspace `ps` could not produce the `role`/`prio` fields without our `proc` extension.
 
-Every limitation is written down in `docs/TECHNICAL_REPORT.md` §11.
-
-*Speaker (≈60s): "we list what we did *not* do — none of it is a surprise."*
-
----
-
-## Slide 12 — Future work (concrete, bounded)
-
-**Near-term (no redesign needed):**
-
-1. `triage_seq.c` sequential baseline + measured speedup table.
-2. `agent_kill_test.c` for explicit fault-isolation benchmark.
-3. Real virtio-serial port + xv6 device driver (replace console-framing).
-4. Within-priority round-robin cursor in `scheduler()`.
-5. Upstream retry signal once a termination protocol is designed.
-6. Live-mode bench profile folded into `REPORT.md`.
-
-**Beyond-the-static-DAG (architectural extensions, same OS primitives):**
-
-7. **Dynamic planner-executor** — first agent emits a JSON plan,
-   orchestrator forks workers per plan. Replaces hardcoded 5-stage
-   chain in `triage.c` with a small plan interpreter.
-8. **FS-backed RAG** — agents persist & retrieve context through the
-   xv6 file system (turns the unused §3 row into a real contribution).
-9. **ReAct reflection** — extend the Evaluator from quality gate to
-   thought/action loop, reusing the same `kill`+`sleep/wakeup` IPC.
-10. **Request-id multiplexing in `proxy_daemon`** — lifts the
-    `proxy_lock` ceiling so live-mode parallelism becomes measurable.
-
-None of 1–6 require a redesign; 7–10 reuse the OS primitives we already
-ship and would extend Liberal_OS from a single-shape pipeline to a
-general LLM-agent runtime.
-
-*Speaker (≈30s): "1–6 are deliverables. 7–10 are the architectural arc that turns
-this from a triage demo into a generic OS-for-LLM platform — same kernel work,
-new compositions."*
+**Screenshot 5 — `priotest` priority scheduling**
+- 6 processes spawned with descending priorities (5 → 0).
+- Completion order tracked: `DONE i=0 prio=5 t=0` first, `DONE i=5 prio=0 t=0` last.
+- Spearman correlation **ρ = −1.000** between priority and completion rank → priority scheduler is doing what we designed.
 
 ---
 
-## Slide 13 — Reproducibility
+## Slide 10 — Part 4: Demo (3/3) — Demo Walk-through & Regression
 
-```bash
-# 1. install build deps (Ubuntu 24.04+)
-sudo apt install -y build-essential gdb-multiarch qemu-system-misc \
-                    gcc-riscv64-linux-gnu binutils-riscv64-linux-gnu python3
+**Screenshot 6 — `triage short.log` inside xv6 shell**
+- Live `PROXY_REQ` lines emitted by parser/classifier/root-cause/fix-suggester/evaluator.
+- Visible `EVAL_RETRY` events for two log lines → evaluator-supervisor loop firing on real output.
+- Final `TRIAGE_DONE` after bounded retries.
 
-# 2. clone and build
-git clone <team-repo-URL> Liberal_OS && cd Liberal_OS
+**Screenshot 7 — `make regression` 3/3 PASS**
+- Gate 1: headless xv6 boot + smoke.
+- Gate 2: shell interaction (commands echo, basic syscalls).
+- Gate 3: mock proxy end-to-end.
+- All green → the design is reproducible from a clean checkout, not just a one-off demo.
 
-# 3. gates
-make regression
-bash tests/e2e_mock.sh
-BENCH_N=5 bash bench/run_all.sh
-
-# 4. live demo (needs UPSTAGE_API_KEY in .env)
-cd xv6-src && make qemu
-$ triage short.log
-$ agentstat
-$ priotest
-```
-
-*Speaker (≈30s): everything is reproducible from a clean Ubuntu 24.04 machine.*
+**Talking-point summary**
+- Five LLM agents, each a real xv6 process.
+- One evaluator, one priority scheduler, two new syscalls.
+- Reproducible, measurable, and isolated — at the OS level, by construction.
 
 ---
 
-## Slide 14 — Q&A
+## Backup / Q&A — Limitations and What's Next
 
-**Anticipated questions:**
-
-- *"Why not just use Python multiprocessing?"* → Slide 2 + Slide 4 (rows 1–7).
-- *"Did you really modify the scheduler?"* → `proc.c::scheduler()` diff + Slide 8.
-- *"How do you know retries are bounded?"* → Slide 7, mock test.
-- *"What is the proxy protocol exactly?"* → Slide 6.
-- *"What about live-mode performance?"* → Slide 11 limitations.
-
-*Speaker (≈30s): invite questions. If asked about LoC, the Technical Report Appendix A has it.*
+- **Filesystem usage is shallow** (read-only context loading). Persistent agent state via a new fs-backed mechanism is tracked as **F-01**.
+- **Live-mode benchmark** at `BENCH_N=5` is still a human-run step (T-62); reported numbers in this deck use `replay`/`mock` for reproducibility.
+- **Single-host scope**: no multi-node scheduling; agents share one xv6 guest.
+- **Future work**:
+  - Planner-executor agents on top of the current static DAG.
+  - Proxy multiplexing for higher live throughput.
+  - RAG / ReAct loops as additional agent roles.
 
 ---
 
-## Slide 15 — Thank you
-
-**Liberal_OS** — xv6 + Upstage Solar Pro 3 + four people + one harness.
-
-Repository: `<team-repo-URL>`
-Technical report: `docs/TECHNICAL_REPORT.md`
-Process document: `PROCESS.md`
-
-*Speaker (≈10s): thanks, name the team again, stop.*
-
----
-
-## Timing budget (target: 15 minutes)
-
-| Slide | Topic | Target seconds | Cumulative |
-|---|---|---:|---:|
-| 1 | Title | 30 | 0:30 |
-| 2 | Motivation | 45 | 1:15 |
-| 3 | Killer scenario | 60 | 2:15 |
-| 4 | OS concept mapping | 60 | 3:15 |
-| 5 | Architecture | 45 | 4:00 |
-| 6 | Proxy transport | 60 | 5:00 |
-| 7 | Supervisor pattern | 45 | 5:45 |
-| 8 | Priority scheduling | 45 | 6:30 |
-| 9 | Harness | 60 | 7:30 |
-| 10 | Evaluation | 45 | 8:15 |
-| 11 | Limitations | 60 | 9:15 |
-| 12 | Future work | 30 | 9:45 |
-| 13 | Reproducibility | 30 | 10:15 |
-| 14 | Q&A intro | 30 | 10:45 |
-| 15 | Thanks | 10 | 10:55 |
-
-Leaves ~4 minutes for the actual Q&A inside the 15-minute slot.
-
----
-
-*End of draft. Hand-off plan: render to `slides/final.pptx` via Marp or
-manual paste-into-Keynote; replace the ASCII diagrams in slides 3 and 5
-with the rendered PNGs from `docs/`.*
+*End of draft.*

@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Liberal_OS — Final Presentation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --primary: #76b900;
+    --primary-dark: #5a8d00;
+    --on-primary: #000000;
+    --ink: #000000;
+    --canvas: #ffffff;
+    --surface-dark: #000000;
+    --surface-soft: #f7f7f7;
+    --surface-elevated: #1a1a1a;
+    --hairline: #cccccc;
+    --hairline-strong: #5e5e5e;
+    --body: #1a1a1a;
+    --mute: #757575;
+    --stone: #898989;
+    --on-dark: #ffffff;
+    --on-dark-mute: rgba(255,255,255,0.7);
+    --link-blue: #0046a4;
+    --accent-green-pale: #bff230;
+
+    --r-sm: 2px;
+    --r-none: 0;
+
+    --gap-xs: 4px;
+    --gap-sm: 8px;
+    --gap-md: 12px;
+    --gap-lg: 16px;
+    --gap-xl: 24px;
+    --gap-xxl: 32px;
+    --gap-section: 64px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    width: 100%;
+    background: var(--surface-dark);
+    font-family: 'Inter', Arial, Helvetica, sans-serif;
+    color: var(--ink);
+    overflow: hidden;
+  }
+
+  .deck {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Each slide fits a 16:9 stage */
+  .stage {
+    position: relative;
+    width: min(100vw, calc(100vh * 16 / 9));
+    height: min(100vh, calc(100vw * 9 / 16));
+    background: var(--canvas);
+    overflow: hidden;
+  }
+
+  .slide {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    padding: 56px 72px 72px;
+  }
+
+  .slide.active { display: flex; }
+
+  /* ---------- Dark hero slide ---------- */
+  .slide.dark {
+    background: var(--surface-dark);
+    color: var(--on-dark);
+  }
+
+  /* ---------- Eyebrow ---------- */
+  .eyebrow {
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--mute);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .dark .eyebrow { color: var(--on-dark-mute); }
+  .eyebrow::before {
+    content: "";
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    background: var(--primary);
+  }
+
+  /* ---------- Headings ---------- */
+  h1.display {
+    font-size: 64px;
+    font-weight: 700;
+    line-height: 1.05;
+    letter-spacing: -0.01em;
+    margin-bottom: 24px;
+  }
+  h2.heading {
+    font-size: 38px;
+    font-weight: 700;
+    line-height: 1.15;
+    letter-spacing: -0.005em;
+    margin-bottom: 8px;
+  }
+  h3.sub {
+    font-size: 20px;
+    font-weight: 400;
+    line-height: 1.4;
+    color: var(--body);
+    margin-bottom: 28px;
+  }
+  .dark h3.sub { color: var(--on-dark-mute); }
+
+  .lead {
+    font-size: 22px;
+    font-weight: 400;
+    line-height: 1.45;
+    color: var(--body);
+    margin-bottom: 24px;
+    max-width: 920px;
+  }
+  .lead strong { font-weight: 700; color: var(--ink); }
+  .dark .lead { color: var(--on-dark-mute); }
+  .dark .lead strong { color: var(--on-dark); }
+
+  /* ---------- Body content ---------- */
+  .content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    min-height: 0;
+  }
+
+  ul.bullets {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  ul.bullets li {
+    position: relative;
+    padding-left: 22px;
+    font-size: 18px;
+    line-height: 1.5;
+    color: var(--body);
+  }
+  ul.bullets li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 10px;
+    width: 8px;
+    height: 8px;
+    background: var(--primary);
+  }
+  ul.bullets li strong { font-weight: 700; color: var(--ink); }
+  .dark ul.bullets li { color: var(--on-dark-mute); }
+  .dark ul.bullets li strong { color: var(--on-dark); }
+
+  /* ---------- Code / ASCII diagram block ---------- */
+  pre.diagram {
+    background: var(--surface-soft);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-sm);
+    padding: 20px 24px;
+    font-family: 'JetBrains Mono', 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--ink);
+    white-space: pre;
+    overflow: hidden;
+  }
+  pre.diagram .accent { color: var(--primary-dark); font-weight: 700; }
+
+  /* ---------- Vector (SVG) diagrams ---------- */
+  .dia-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px 16px;
+    background: var(--surface-soft);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-sm);
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .dia-wrap > .corner {
+    position: absolute;
+    top: 0; left: 0;
+    width: 12px;
+    height: 12px;
+    background: var(--primary);
+  }
+  .dia-svg {
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    display: block;
+  }
+  .dia-svg text {
+    font-family: 'Inter', Arial, Helvetica, sans-serif;
+  }
+
+  /* ---------- Two-column ---------- */
+  .two-col {
+    display: grid;
+    grid-template-columns: 1.05fr 0.95fr;
+    gap: 32px;
+    flex: 1;
+    min-height: 0;
+  }
+  .two-col-tight {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    flex: 1;
+    min-height: 0;
+  }
+
+  /* ---------- Cards (feature, callout) ---------- */
+  .card {
+    position: relative;
+    background: var(--canvas);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-sm);
+    padding: 24px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .card .corner {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 12px;
+    height: 12px;
+    background: var(--primary);
+  }
+  .card .card-title {
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.3;
+    color: var(--ink);
+  }
+  .card .card-body {
+    font-size: 15px;
+    line-height: 1.55;
+    color: var(--body);
+  }
+
+  /* ---------- Table ---------- */
+  table.matrix {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 15px;
+    background: var(--canvas);
+  }
+  table.matrix th,
+  table.matrix td {
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--hairline);
+    line-height: 1.4;
+  }
+  table.matrix thead th {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--mute);
+    border-bottom: 1px solid var(--ink);
+    background: var(--surface-soft);
+  }
+  table.matrix td.num {
+    font-weight: 700;
+    color: var(--primary-dark);
+    width: 36px;
+  }
+  table.matrix td code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    background: var(--surface-soft);
+    padding: 1px 6px;
+    border-radius: var(--r-sm);
+  }
+  table.matrix tr.reused td.num { color: var(--mute); font-weight: 400; }
+  table.matrix tr.reused td { color: var(--mute); font-style: italic; }
+
+  /* ---------- Screenshot panel ---------- */
+  .shots {
+    display: grid;
+    gap: 20px;
+    flex: 1;
+    min-height: 0;
+  }
+  .shots.cols-2 { grid-template-columns: 1fr 1fr; }
+  .shots.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+  .shot {
+    position: relative;
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-sm);
+    background: var(--canvas);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .shot .shot-img {
+    flex: 1;
+    background: #0a0a0a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    min-height: 0;
+  }
+  .shot .shot-img img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+  .shot .shot-cap {
+    padding: 10px 14px;
+    border-top: 1px solid var(--hairline);
+    font-size: 13px;
+    line-height: 1.4;
+    background: var(--surface-soft);
+  }
+  .shot .shot-cap b {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--primary-dark);
+    display: block;
+    margin-bottom: 2px;
+  }
+
+  /* ---------- Title slide pieces ---------- */
+  .title-meta {
+    margin-top: 32px;
+    display: grid;
+    grid-template-columns: max-content max-content max-content;
+    gap: 40px;
+    font-size: 16px;
+    color: var(--on-dark-mute);
+  }
+  .title-meta .label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--on-dark-mute);
+    margin-bottom: 4px;
+  }
+  .title-meta .value {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--on-dark);
+  }
+
+  .btn-row { display: flex; gap: 16px; margin-top: 40px; }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    height: 44px;
+    padding: 0 24px;
+    font-size: 16px;
+    font-weight: 700;
+    border-radius: var(--r-sm);
+    text-decoration: none;
+    cursor: default;
+  }
+  .btn-primary { background: var(--primary); color: var(--on-primary); }
+  .btn-outline-dark {
+    background: transparent;
+    color: var(--on-dark);
+    border: 1px solid var(--on-dark);
+  }
+
+  /* ---------- Chrome (nav + counter) ---------- */
+  .chrome {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 32px;
+    background: var(--surface-dark);
+    color: var(--on-dark);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    z-index: 50;
+  }
+  .chrome .brand { color: var(--primary); }
+  .chrome .nav { display: flex; gap: 12px; align-items: center; }
+  .chrome button {
+    background: transparent;
+    border: 1px solid var(--hairline-strong);
+    color: var(--on-dark);
+    font: inherit;
+    padding: 4px 10px;
+    border-radius: var(--r-sm);
+    cursor: pointer;
+  }
+  .chrome button:hover { border-color: var(--primary); color: var(--primary); }
+  .chrome .counter { color: var(--on-dark-mute); }
+
+  /* Slide reserves bottom margin for chrome */
+  .slide { padding-bottom: 56px; }
+
+  /* ---------- Section rhythm helper ---------- */
+  .note {
+    margin-top: auto;
+    padding-top: 16px;
+    border-top: 1px solid var(--hairline);
+    font-size: 13px;
+    color: var(--mute);
+    line-height: 1.5;
+  }
+  .dark .note { border-top-color: var(--hairline-strong); color: var(--on-dark-mute); }
+
+  /* ---------- Stat callout ---------- */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
+  .stat {
+    position: relative;
+    border: 1px solid var(--hairline);
+    background: var(--canvas);
+    padding: 24px 28px;
+    border-radius: var(--r-sm);
+  }
+  .stat .corner {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 12px;
+    height: 12px;
+    background: var(--primary);
+  }
+  .stat .stat-num {
+    font-size: 44px;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--primary-dark);
+    margin-bottom: 6px;
+  }
+  .stat .stat-cap {
+    font-size: 14px;
+    color: var(--body);
+    line-height: 1.4;
+  }
+
+  /* ---------- Inline code ---------- */
+  code.kbd, code.inline {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.92em;
+    background: var(--surface-soft);
+    border: 1px solid var(--hairline);
+    padding: 1px 6px;
+    border-radius: var(--r-sm);
+  }
+  .dark code.inline {
+    background: var(--surface-elevated);
+    border-color: var(--hairline-strong);
+    color: var(--on-dark);
+  }
+</style>
+</head>
+<body>
+<div class="deck">
+  <div class="stage" id="stage">
+
+    <!-- =================================================== Slide 1 — Title -->
+    <section class="slide dark active" data-title="Title">
+      <div class="eyebrow">Direction A · OS for LLM</div>
+      <h1 class="display">Liberal_OS</h1>
+      <h3 class="sub" style="font-size:24px; max-width:880px;">An xv6-based mini-OS for orchestrating five LLM agents — kernel-managed, pipe-connected, priority-scheduled.</h3>
+
+      <div class="title-meta">
+        <div>
+          <div class="label">Team</div>
+          <div class="value">Liberal_OS</div>
+        </div>
+        <div>
+          <div class="label">Presenter</div>
+          <div class="value">Lee Taejin</div>
+        </div>
+        <div>
+          <div class="label">Backend</div>
+          <div class="value">Upstage Solar Pro 3</div>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <span class="btn btn-primary">Start the Demo</span>
+        <span class="btn btn-outline-dark">github.com/HANJUSON/Liberal_OS</span>
+      </div>
+    </section>
+
+    <!-- =================================================== Slide 2 — Problem & Direction -->
+    <section class="slide" data-title="Problem &amp; Direction">
+      <div class="eyebrow">Framing</div>
+      <h2 class="heading">Why "OS for LLM" — not another LLM wrapper?</h2>
+
+      <div class="content">
+        <p class="lead">Multi-agent LLM systems today are mostly Python scripts on Linux. The OS sees them as one opaque process tree — no isolation, no priority for critical work, no quota enforcement. <strong>We claim agent orchestration is an OS problem.</strong></p>
+
+        <div class="two-col">
+          <div class="card">
+            <div class="corner"></div>
+            <div class="card-title">The thin-wrapper trap</div>
+            <div class="card-body">The course guideline explicitly disqualifies projects where the OS angle is only "it runs on Linux." We took that seriously and modified the xv6 kernel itself — not the userspace around it.</div>
+          </div>
+          <div class="card">
+            <div class="corner"></div>
+            <div class="card-title">First-class kernel entities</div>
+            <div class="card-body">Each agent should be a kernel-managed process with its own role, priority, and signal handling — scheduling, IPC, and isolation come from the kernel, not from a userspace library.</div>
+          </div>
+        </div>
+
+        <p class="note">Direction A per project guideline §2 · MASTER_PLAN.md §1.2</p>
+      </div>
+    </section>
+
+    <!-- =================================================== Slide 3 — LLM Architecture -->
+    <section class="slide" data-title="LLM Architecture">
+      <div class="eyebrow">Part 1 · LLM Architecture</div>
+      <h2 class="heading">Five cooperating agents, one supervisor</h2>
+
+      <div class="content">
+        <div class="two-col">
+          <div class="dia-wrap">
+            <span class="corner"></span>
+            <svg class="dia-svg" viewBox="0 0 440 440" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Five-agent pipeline diagram">
+              <defs>
+                <marker id="s3-arr-k" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+                  <path d="M0,0 L10,5 L0,10 z" fill="#000000"/>
+                </marker>
+                <marker id="s3-arr-g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+                  <path d="M0,0 L10,5 L0,10 z" fill="#76b900"/>
+                </marker>
+              </defs>
+
+              <!-- Input label -->
+              <text x="170" y="14" text-anchor="middle" font-size="10" font-weight="700" fill="#757575" letter-spacing="1.2">[ RAW LOG STREAM ]</text>
+              <line x1="170" y1="20" x2="170" y2="34" stroke="#000" stroke-width="2" marker-end="url(#s3-arr-k)"/>
+
+              <!-- parser -->
+              <rect x="50" y="38" width="240" height="50" rx="2" ry="2" fill="#ffffff" stroke="#000000" stroke-width="2"/>
+              <text x="170" y="56" text-anchor="middle" font-size="11" font-weight="700" fill="#5a8d00" letter-spacing="1.2">PARSER</text>
+              <text x="170" y="76" text-anchor="middle" font-size="13" fill="#1a1a1a">raw line → structured record</text>
+              <line x1="170" y1="88" x2="170" y2="110" stroke="#000" stroke-width="2" marker-end="url(#s3-arr-k)"/>
+              <text x="182" y="103" font-size="10" fill="#757575">pipe</text>
+
+              <!-- classifier -->
+              <rect x="50" y="114" width="240" height="50" rx="2" ry="2" fill="#ffffff" stroke="#000000" stroke-width="2"/>
+              <text x="170" y="132" text-anchor="middle" font-size="11" font-weight="700" fill="#5a8d00" letter-spacing="1.2">CLASSIFIER</text>
+              <text x="170" y="152" text-anchor="middle" font-size="13" fill="#1a1a1a">level: INFO / WARN / ERROR</text>
+              <line x1="170" y1="164" x2="170" y2="186" stroke="#000" stroke-width="2" marker-end="url(#s3-arr-k)"/>
+              <text x="182" y="179" font-size="10" fill="#757575">pipe</text>
+
+              <!-- root-cause -->
+              <rect x="50" y="190" width="240" height="50" rx="2" ry="2" fill="#ffffff" stroke="#000000" stroke-width="2"/>
+              <text x="170" y="208" text-anchor="middle" font-size="11" font-weight="700" fill="#5a8d00" letter-spacing="1.2">ROOT-CAUSE</text>
+              <text x="170" y="228" text-anchor="middle" font-size="13" fill="#1a1a1a">diagnoses ERROR / CRITICAL</text>
+              <line x1="170" y1="240" x2="170" y2="262" stroke="#000" stroke-width="2" marker-end="url(#s3-arr-k)"/>
+              <text x="182" y="255" font-size="10" fill="#757575">pipe</text>
+
+              <!-- fix-suggester -->
+              <rect x="50" y="266" width="240" height="50" rx="2" ry="2" fill="#ffffff" stroke="#000000" stroke-width="2"/>
+              <text x="170" y="284" text-anchor="middle" font-size="11" font-weight="700" fill="#5a8d00" letter-spacing="1.2">FIX-SUGGESTER</text>
+              <text x="170" y="304" text-anchor="middle" font-size="13" fill="#1a1a1a">proposes remediation</text>
+              <line x1="170" y1="316" x2="170" y2="338" stroke="#000" stroke-width="2" marker-end="url(#s3-arr-k)"/>
+              <text x="182" y="331" font-size="10" fill="#757575">pipe</text>
+
+              <!-- evaluator (accent) -->
+              <rect x="50" y="342" width="240" height="50" rx="2" ry="2" fill="#ffffff" stroke="#5a8d00" stroke-width="2.5"/>
+              <text x="170" y="360" text-anchor="middle" font-size="11" font-weight="700" fill="#5a8d00" letter-spacing="1.2">EVALUATOR · SUPERVISOR</text>
+              <text x="170" y="380" text-anchor="middle" font-size="13" fill="#1a1a1a">quality check + retry signal</text>
+              <line x1="170" y1="392" x2="170" y2="414" stroke="#000" stroke-width="2" marker-end="url(#s3-arr-k)"/>
+              <text x="170" y="432" text-anchor="middle" font-size="11" font-weight="700" fill="#1a1a1a">Triage report</text>
+
+              <!-- Retry loop on the right -->
+              <path d="M 290 367 C 370 367 370 63 290 63" stroke="#76b900" stroke-width="2" stroke-dasharray="5 4" fill="none" marker-end="url(#s3-arr-g)"/>
+              <text x="380" y="210" font-size="11" font-weight="700" fill="#5a8d00">retry</text>
+              <text x="380" y="226" font-size="10" fill="#5a8d00">kill +</text>
+              <text x="380" y="240" font-size="10" fill="#5a8d00">wakeup</text>
+            </svg>
+          </div>
+
+          <ul class="bullets">
+            <li><strong>parser</strong> — turns one raw log line into a structured record.</li>
+            <li><strong>classifier</strong> — assigns level (INFO / WARN / ERROR / CRITICAL).</li>
+            <li><strong>root-cause</strong> — runs only on ERROR / CRITICAL items.</li>
+            <li><strong>fix-suggester</strong> — proposes a remediation plan.</li>
+            <li><strong>evaluator</strong> — quality-checks the previous output and can demand retries.</li>
+            <li>All five hit the same backend: <strong>Upstage Solar Pro 3</strong> through one Proxy Daemon on the host.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================================================== Slide 4 — Supervisor pattern -->
+    <section class="slide" data-title="Supervisor Pattern">
+      <div class="eyebrow">Part 1 · Supervisor Pattern</div>
+      <h2 class="heading">Why an evaluator? — LLM output is non-deterministic.</h2>
+
+      <div class="content">
+        <div class="two-col">
+          <div class="dia-wrap">
+            <span class="corner"></span>
+            <svg class="dia-svg" viewBox="0 0 540 380" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Worker–Evaluator supervisor sequence">
+              <defs>
+                <marker id="s4-arr-k" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+                  <path d="M0,0 L10,5 L0,10 z" fill="#000000"/>
+                </marker>
+                <marker id="s4-arr-g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+                  <path d="M0,0 L10,5 L0,10 z" fill="#76b900"/>
+                </marker>
+              </defs>
+
+              <!-- Worker actor -->
+              <rect x="20" y="14" width="170" height="50" rx="2" ry="2" fill="#ffffff" stroke="#000000" stroke-width="2"/>
+              <text x="105" y="34" text-anchor="middle" font-size="11" font-weight="700" fill="#5a8d00" letter-spacing="1.2">WORKER AGENT</text>
+              <text x="105" y="52" text-anchor="middle" font-size="12" fill="#1a1a1a">e.g. fix-suggester</text>
+
+              <!-- Evaluator actor (accent) -->
+              <rect x="350" y="14" width="170" height="50" rx="2" ry="2" fill="#ffffff" stroke="#5a8d00" stroke-width="2.5"/>
+              <text x="435" y="34" text-anchor="middle" font-size="11" font-weight="700" fill="#5a8d00" letter-spacing="1.2">EVALUATOR</text>
+              <text x="435" y="52" text-anchor="middle" font-size="12" fill="#1a1a1a">supervisor</text>
+
+              <!-- Lifelines -->
+              <line x1="105" y1="64" x2="105" y2="350" stroke="#cccccc" stroke-width="1" stroke-dasharray="4 4"/>
+              <line x1="435" y1="64" x2="435" y2="350" stroke="#cccccc" stroke-width="1" stroke-dasharray="4 4"/>
+
+              <!-- Message 1: result via pipe -->
+              <text x="270" y="92" text-anchor="middle" font-size="12" font-weight="700" fill="#1a1a1a">1. result via pipe</text>
+              <line x1="105" y1="104" x2="430" y2="104" stroke="#000000" stroke-width="2" marker-end="url(#s4-arr-k)"/>
+
+              <!-- Evaluator self-note: quality check -->
+              <rect x="380" y="124" width="120" height="28" rx="2" ry="2" fill="#feeeb2" stroke="#df6500" stroke-width="1"/>
+              <text x="440" y="142" text-anchor="middle" font-size="11" font-weight="700" fill="#1a1a1a">quality check (LLM)</text>
+
+              <!-- Message 2: retry signal (green dashed, right to left) -->
+              <text x="270" y="180" text-anchor="middle" font-size="12" font-weight="700" fill="#5a8d00">2. retry signal · kill() + sleep/wakeup</text>
+              <line x1="435" y1="192" x2="110" y2="192" stroke="#76b900" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#s4-arr-g)"/>
+              <text x="270" y="208" text-anchor="middle" font-size="10" fill="#5a8d00">fail · below threshold</text>
+
+              <!-- Message 3: new result -->
+              <text x="270" y="238" text-anchor="middle" font-size="12" font-weight="700" fill="#1a1a1a">3. new result</text>
+              <line x1="105" y1="250" x2="430" y2="250" stroke="#000000" stroke-width="2" marker-end="url(#s4-arr-k)"/>
+
+              <!-- Pass note on evaluator -->
+              <rect x="380" y="270" width="120" height="28" rx="2" ry="2" fill="#ffffff" stroke="#5a8d00" stroke-width="1.5"/>
+              <text x="440" y="288" text-anchor="middle" font-size="11" font-weight="700" fill="#5a8d00">pass</text>
+
+              <!-- Forward to next stage -->
+              <line x1="435" y1="312" x2="520" y2="312" stroke="#000000" stroke-width="2" marker-end="url(#s4-arr-k)"/>
+              <text x="478" y="332" text-anchor="middle" font-size="11" font-weight="700" fill="#1a1a1a">forward → next stage</text>
+
+              <!-- Bounded retry note on worker side -->
+              <text x="105" y="332" text-anchor="middle" font-size="10" fill="#757575">bounded to 3 attempts</text>
+            </svg>
+          </div>
+
+          <ul class="bullets">
+            <li>Implemented with <strong>xv6 <code class="inline">kill()</code> + <code class="inline">sleep/wakeup</code></strong>, not a Python <code class="inline">while</code> loop.</li>
+            <li><strong>Bounded retry</strong>: max 3 attempts, then surface failure to the orchestrator.</li>
+            <li>Demo trace confirms the loop firing — three <code class="inline">EVAL_RETRY</code> events followed by <code class="inline">evaluator:FAIL</code> on stubborn lines.</li>
+            <li>This is a real OS-level <strong>signaling + synchronization</strong> problem.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================================================== Slide 5 — OS Adaptation -->
+    <section class="slide" data-title="OS Adaptation">
+      <div class="eyebrow">Part 2 · OS Adaptation</div>
+      <h2 class="heading">7 mechanisms designed, 1 reused — at the kernel level.</h2>
+
+      <div class="content">
+        <table class="matrix">
+          <thead>
+            <tr><th>#</th><th>Component</th><th>OS concept</th><th>xv6 file(s) modified</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="num">1</td><td>Orchestrator</td><td>Process management</td><td><code>proc.h</code>, <code>proc.c</code> (fork-extend)</td></tr>
+            <tr><td class="num">2</td><td>Agent ↔ agent transport</td><td>IPC (pipes)</td><td><code>pipe.c</code></td></tr>
+            <tr><td class="num">3</td><td>Retry path</td><td>Signals + wakeup</td><td><code>proc.c</code>, <code>trap.c</code></td></tr>
+            <tr><td class="num">4</td><td>Shared context guard</td><td>Synchronization (locks)</td><td><code>spinlock.c</code></td></tr>
+            <tr><td class="num">5</td><td>Per-agent priority</td><td>Scheduling</td><td><code>sched.c</code> (priority queue)</td></tr>
+            <tr><td class="num">6</td><td>Fault isolation</td><td>Address-space isolation</td><td>xv6 default, exercised by design</td></tr>
+            <tr><td class="num">7</td><td>Introspection</td><td>New system calls</td><td><code>syscall.c/h</code>, <code>sysproc.c</code></td></tr>
+            <tr class="reused"><td class="num">–</td><td>Agent context persistence</td><td>File system (reused)</td><td>xv6 fs (no kernel mod yet · F-01)</td></tr>
+          </tbody>
+        </table>
+
+        <p class="note">Rule of thumb: if it could have been <code class="inline">multiprocessing</code> or <code class="inline">cgroups</code>, we did <strong>not</strong> use it. Two new syscalls shipped — <code class="inline">setrole(2)</code> and <code class="inline">agentstat(2)</code> — plus a userspace <code class="inline">priotest</code>.</p>
+      </div>
+    </section>
+
+    <!-- =================================================== Slide 6 — Host-Guest Boundary -->
+    <section class="slide" data-title="Host–Guest Boundary">
+      <div class="eyebrow">Part 2 · Host–Guest Boundary</div>
+      <h2 class="heading">xv6 has no network stack — where does the LLM call happen?</h2>
+
+      <div class="content">
+        <div class="two-col">
+          <div class="dia-wrap">
+            <span class="corner"></span>
+            <svg class="dia-svg" viewBox="0 0 620 380" preserveAspectRatio="xMidYMid meet" role="img" aria-label="QEMU host containing xv6 guest and Proxy Daemon">
+              <defs>
+                <marker id="s6-arr-k" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+                  <path d="M0,0 L10,5 L0,10 z" fill="#000000"/>
+                </marker>
+                <marker id="s6-arr-k-start" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+                  <path d="M10,0 L0,5 L10,10 z" fill="#000000"/>
+                </marker>
+              </defs>
+
+              <!-- Outer container: QEMU host -->
+              <rect x="10" y="40" width="600" height="320" rx="2" ry="2" fill="#ffffff" stroke="#000000" stroke-width="2" stroke-dasharray="6 4"/>
+              <rect x="10" y="14" width="220" height="26" rx="2" ry="2" fill="#000000"/>
+              <text x="120" y="32" text-anchor="middle" font-size="11" font-weight="700" fill="#76b900" letter-spacing="1.4">QEMU HOST (LINUX)</text>
+
+              <!-- xv6 guest box -->
+              <rect x="40" y="80" width="240" height="220" rx="2" ry="2" fill="#ffffff" stroke="#000000" stroke-width="2"/>
+              <rect x="40" y="80" width="240" height="26" fill="#f7f7f7"/>
+              <line x1="40" y1="106" x2="280" y2="106" stroke="#cccccc" stroke-width="1"/>
+              <text x="160" y="98" text-anchor="middle" font-size="11" font-weight="700" fill="#5a8d00" letter-spacing="1.2">XV6 GUEST</text>
+
+              <text x="160" y="134" text-anchor="middle" font-size="14" font-weight="700" fill="#000">orchestrator</text>
+              <text x="160" y="154" text-anchor="middle" font-size="12" fill="#1a1a1a">+ 5 agent processes</text>
+              <text x="160" y="172" text-anchor="middle" font-size="11" fill="#757575">kernel-managed · pipe-linked</text>
+
+              <!-- Five agent role chips -->
+              <g>
+                <rect x="50" y="196" width="42" height="22" rx="2" ry="2" fill="#ffffff" stroke="#cccccc"/>
+                <text x="71" y="211" text-anchor="middle" font-size="10" font-weight="700" fill="#5a8d00">P</text>
+                <rect x="96" y="196" width="42" height="22" rx="2" ry="2" fill="#ffffff" stroke="#cccccc"/>
+                <text x="117" y="211" text-anchor="middle" font-size="10" font-weight="700" fill="#5a8d00">C</text>
+                <rect x="142" y="196" width="42" height="22" rx="2" ry="2" fill="#ffffff" stroke="#cccccc"/>
+                <text x="163" y="211" text-anchor="middle" font-size="10" font-weight="700" fill="#5a8d00">R</text>
+                <rect x="188" y="196" width="42" height="22" rx="2" ry="2" fill="#ffffff" stroke="#cccccc"/>
+                <text x="209" y="211" text-anchor="middle" font-size="10" font-weight="700" fill="#5a8d00">F</text>
+                <rect x="234" y="196" width="42" height="22" rx="2" ry="2" fill="#ffffff" stroke="#5a8d00" stroke-width="1.5"/>
+                <text x="255" y="211" text-anchor="middle" font-size="10" font-weight="700" fill="#5a8d00">E</text>
+              </g>
+              <text x="160" y="240" text-anchor="middle" font-size="9" fill="#757575">parser · classifier · root-cause · fix-suggester · evaluator</text>
+
+              <!-- Two new syscalls badge -->
+              <rect x="55" y="258" width="210" height="32" rx="2" ry="2" fill="#f7f7f7" stroke="#cccccc"/>
+              <text x="160" y="270" text-anchor="middle" font-size="9" font-weight="700" fill="#757575" letter-spacing="1.2">NEW SYSCALLS</text>
+              <text x="160" y="285" text-anchor="middle" font-size="11" font-weight="700" fill="#000">setrole(2) · agentstat(2)</text>
+
+              <!-- Proxy Daemon box -->
+              <rect x="340" y="80" width="240" height="220" rx="2" ry="2" fill="#ffffff" stroke="#000000" stroke-width="2"/>
+              <rect x="340" y="80" width="240" height="26" fill="#f7f7f7"/>
+              <line x1="340" y1="106" x2="580" y2="106" stroke="#cccccc" stroke-width="1"/>
+              <text x="460" y="98" text-anchor="middle" font-size="11" font-weight="700" fill="#5a8d00" letter-spacing="1.2">PROXY DAEMON</text>
+
+              <text x="460" y="134" text-anchor="middle" font-size="14" font-weight="700" fill="#000">Upstage API client</text>
+              <text x="460" y="156" text-anchor="middle" font-size="12" fill="#1a1a1a">• retry + cache</text>
+              <text x="460" y="174" text-anchor="middle" font-size="12" fill="#1a1a1a">• rate-limit backoff</text>
+
+              <!-- Mode chips -->
+              <g>
+                <rect x="355" y="200" width="68" height="26" rx="2" ry="2" fill="#76b900" stroke="#5a8d00"/>
+                <text x="389" y="217" text-anchor="middle" font-size="11" font-weight="700" fill="#000">live</text>
+                <rect x="427" y="200" width="68" height="26" rx="2" ry="2" fill="#ffffff" stroke="#5a8d00" stroke-width="1.5"/>
+                <text x="461" y="217" text-anchor="middle" font-size="11" font-weight="700" fill="#5a8d00">replay</text>
+                <rect x="499" y="200" width="68" height="26" rx="2" ry="2" fill="#ffffff" stroke="#cccccc"/>
+                <text x="533" y="217" text-anchor="middle" font-size="11" font-weight="700" fill="#1a1a1a">mock</text>
+              </g>
+              <text x="460" y="246" text-anchor="middle" font-size="10" fill="#757575">three swappable backends</text>
+
+              <!-- Solar Pro 3 badge -->
+              <rect x="365" y="258" width="190" height="32" rx="2" ry="2" fill="#000000"/>
+              <text x="460" y="270" text-anchor="middle" font-size="9" font-weight="700" fill="#76b900" letter-spacing="1.2">LLM BACKEND</text>
+              <text x="460" y="285" text-anchor="middle" font-size="11" font-weight="700" fill="#ffffff">Upstage Solar Pro 3</text>
+
+              <!-- Bidirectional arrow between the two boxes -->
+              <line x1="282" y1="190" x2="338" y2="190" stroke="#000000" stroke-width="2" marker-start="url(#s6-arr-k-start)" marker-end="url(#s6-arr-k)"/>
+              <text x="310" y="180" text-anchor="middle" font-size="9" font-weight="700" fill="#757575" letter-spacing="0.6">virtio serial</text>
+              <text x="310" y="206" text-anchor="middle" font-size="9" font-weight="700" fill="#757575" letter-spacing="0.6">/ pipe</text>
+            </svg>
+          </div>
+
+          <ul class="bullets">
+            <li>xv6 sees only a <code class="inline">read</code> / <code class="inline">write</code> on a pipe — the LLM is fully abstracted away.</li>
+            <li><strong>live</strong> — real Upstage API call.</li>
+            <li><strong>replay</strong> — cached responses, used for reproducible measurement.</li>
+            <li><strong>mock</strong> — deterministic stub, used for CI and on-stage demo without network.</li>
+            <li>The same xv6 binary works against all three modes — proxy daemon is the swap point.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================================================== Slide 7 — When to Use -->
+    <section class="slide" data-title="When to Use">
+      <div class="eyebrow">Part 3 · When to Use Liberal_OS</div>
+      <h2 class="heading">A fit when you need an agent runtime, not a script.</h2>
+
+      <div class="content">
+        <div class="two-col-tight" style="grid-template-columns: 1fr 1fr; grid-auto-rows: 1fr;">
+          <div class="card">
+            <div class="corner"></div>
+            <div class="card-title">Post-hoc triage of high-volume streams</div>
+            <div class="card-body">Log floods, crash dumps, alert backlogs — workloads that benefit from staged LLM reasoning (extract → classify → diagnose → fix), not a single chat turn.</div>
+          </div>
+          <div class="card">
+            <div class="corner"></div>
+            <div class="card-title">Strong fault isolation between agents</div>
+            <div class="card-body">One agent crashing must not bring the pipeline down. xv6 process isolation gives this by construction; a single Python process does not.</div>
+          </div>
+          <div class="card">
+            <div class="corner"></div>
+            <div class="card-title">Priority differentiation between work items</div>
+            <div class="card-body">CRITICAL logs must preempt INFO. Our modified scheduler enforces this at the kernel level — userspace cannot bypass it.</div>
+          </div>
+          <div class="card">
+            <div class="corner"></div>
+            <div class="card-title">Platform-level retry & quality contract</div>
+            <div class="card-body">The evaluator–supervisor + signal-based retry is a reusable mechanism, not a per-script ad-hoc loop. The platform owns the contract.</div>
+          </div>
+        </div>
+
+        <p class="note"><strong>Not a fit for:</strong> real-time chat assistants, single-agent toolformer flows, or any workload that comfortably fits in one process.</p>
+      </div>
+    </section>
+
+    <!-- =================================================== Slide 8 — Demo 1/3 -->
+    <section class="slide" data-title="Demo 1/3 — End-to-End">
+      <div class="eyebrow">Part 4 · Demo 1 / 3</div>
+      <h2 class="heading">End-to-end triage — the pipeline closes.</h2>
+
+      <div class="content">
+        <div class="shots cols-3">
+          <div class="shot">
+            <div class="shot-img"><img src="../out/screenshots/screenshot1.png" alt="Upstage connectivity proof" /></div>
+            <div class="shot-cap">
+              <b>Shot 1 · Connectivity</b>
+              <code class="inline">hello_upstage</code> live round-trip: ~1.07s vs. mock 0.05s — real inference, not a stub.
+            </div>
+          </div>
+          <div class="shot">
+            <div class="shot-img"><img src="../out/screenshots/screenshot2.png" alt="25-call full-stack triage" /></div>
+            <div class="shot-cap">
+              <b>Shot 2 · Full-stack 25 calls</b>
+              5 lines × 5 stages = 25 LLM calls. <code class="inline">served:{parser:5, classifier:5, ...}</code>, <code class="inline">eval_oks:5</code>.
+            </div>
+          </div>
+          <div class="shot">
+            <div class="shot-img"><img src="../out/screenshots/screenshot3.png" alt="Per-call trace log" /></div>
+            <div class="shot-cap">
+              <b>Shot 3 · Per-call trace</b>
+              <code class="inline">PROXY_REQ</code> lines tagged with distinct kernel pid + role — proof of real xv6 processes.
+            </div>
+          </div>
+        </div>
+
+        <p class="note">Talking point: each row of the trace is one xv6 process, registered with our <code class="inline">setrole(2)</code> syscall, talking over a real pipe — not a Python thread.</p>
+      </div>
+    </section>
+
+    <!-- =================================================== Slide 9 — Demo 2/3 -->
+    <section class="slide" data-title="Demo 2/3 — OS-Level Visibility">
+      <div class="eyebrow">Part 4 · Demo 2 / 3</div>
+      <h2 class="heading">OS-level visibility — kernel introspection in action.</h2>
+
+      <div class="content">
+        <div class="shots cols-2">
+          <div class="shot">
+            <div class="shot-img"><img src="../out/screenshots/screenshot4.png" alt="agentstat syscall output" /></div>
+            <div class="shot-cap">
+              <b>Shot 4 · <code class="inline">agentstat</code> syscall</b>
+              New kernel syscall returns JSON for every proc: <code class="inline">pid</code>, <code class="inline">name</code>, <code class="inline">role</code>, <code class="inline">prio</code>, <code class="inline">st</code>. Userspace <code class="inline">ps</code> could not produce the <code class="inline">role</code>/<code class="inline">prio</code> fields.
+            </div>
+          </div>
+          <div class="shot">
+            <div class="shot-img"><img src="../out/screenshots/screenshot5.png" alt="priotest priority scheduling" /></div>
+            <div class="shot-cap">
+              <b>Shot 5 · <code class="inline">priotest</code> ρ = −1.000</b>
+              6 processes spawned with descending priorities (5 → 0). Completion order is monotonically inverse — Spearman ρ = −1.000. Priority scheduler does exactly what we designed.
+            </div>
+          </div>
+        </div>
+
+        <div class="stats-row">
+          <div class="stat">
+            <div class="corner"></div>
+            <div class="stat-num">2</div>
+            <div class="stat-cap">new system calls shipped — <code class="inline">setrole(2)</code> and <code class="inline">agentstat(2)</code>.</div>
+          </div>
+          <div class="stat">
+            <div class="corner"></div>
+            <div class="stat-num">−1.000</div>
+            <div class="stat-cap">Spearman ρ between assigned priority and completion order in <code class="inline">priotest</code>.</div>
+          </div>
+          <div class="stat">
+            <div class="corner"></div>
+            <div class="stat-num">5</div>
+            <div class="stat-cap">distinct xv6 processes per triage run — one per agent role.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================================================== Slide 10 — Demo 3/3 -->
+    <section class="slide" data-title="Demo 3/3 — Walkthrough & Regression">
+      <div class="eyebrow">Part 4 · Demo 3 / 3</div>
+      <h2 class="heading">Walkthrough &amp; regression — reproducible, not a one-off.</h2>
+
+      <div class="content">
+        <div class="shots cols-2">
+          <div class="shot">
+            <div class="shot-img"><img src="../out/screenshots/screenshot6.png" alt="xv6 triage shell session" /></div>
+            <div class="shot-cap">
+              <b>Shot 6 · <code class="inline">triage short.log</code> in the xv6 shell</b>
+              Live <code class="inline">PROXY_REQ</code> emissions from all 5 stages, visible <code class="inline">EVAL_RETRY</code> events on two log lines, final <code class="inline">TRIAGE_DONE</code> after bounded retries.
+            </div>
+          </div>
+          <div class="shot">
+            <div class="shot-img"><img src="../out/screenshots/screenshot7.png" alt="make regression PASS" /></div>
+            <div class="shot-cap">
+              <b>Shot 7 · <code class="inline">make regression</code> 3 / 3 PASS</b>
+              Gate 1: headless xv6 boot + smoke. Gate 2: shell interaction. Gate 3: mock proxy end-to-end. All green from a clean checkout.
+            </div>
+          </div>
+        </div>
+
+        <p class="note">Talking point: five LLM agents, one evaluator-supervisor, one priority scheduler, two new syscalls — reproducible, measurable, and isolated <strong>at the OS level, by construction</strong>.</p>
+      </div>
+    </section>
+
+    <!-- =================================================== Slide 11 — Backup / Q&A -->
+    <section class="slide" data-title="Backup — Limitations &amp; Next">
+      <div class="eyebrow">Backup · For Q&amp;A</div>
+      <h2 class="heading">Limitations and what comes next.</h2>
+
+      <div class="content">
+        <div class="two-col">
+          <div>
+            <h3 style="font-size:18px; font-weight:700; margin-bottom:12px; color:var(--ink);">Known limitations</h3>
+            <ul class="bullets">
+              <li><strong>Filesystem usage is shallow</strong> — read-only context only. Persistent agent state via a new fs-backed mechanism is tracked as <code class="inline">F-01</code>.</li>
+              <li><strong>Live-mode benchmark</strong> at <code class="inline">BENCH_N=5</code> is still a human-run step (<code class="inline">T-62</code>); reported numbers use replay/mock for reproducibility.</li>
+              <li><strong>Single-host scope</strong> — no multi-node scheduling; agents share one xv6 guest.</li>
+            </ul>
+          </div>
+          <div>
+            <h3 style="font-size:18px; font-weight:700; margin-bottom:12px; color:var(--ink);">Future work</h3>
+            <ul class="bullets">
+              <li>Planner-executor agents on top of the current static DAG.</li>
+              <li>Proxy multiplexing for higher live throughput.</li>
+              <li>RAG / ReAct loops as additional agent roles.</li>
+              <li>Deepening fs as a first-class agent-state store (F-01).</li>
+            </ul>
+          </div>
+        </div>
+
+        <p class="note">Thank you. Questions?</p>
+      </div>
+    </section>
+
+    <!-- =================================================== Chrome -->
+    <div class="chrome">
+      <div class="brand">▮ LIBERAL_OS · FINAL PRESENTATION</div>
+      <div class="nav">
+        <button id="prevBtn" aria-label="Previous">◀ Prev</button>
+        <span class="counter"><span id="cur">1</span> / <span id="total">11</span></span>
+        <button id="nextBtn" aria-label="Next">Next ▶</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  (function () {
+    const slides = Array.from(document.querySelectorAll('.slide'));
+    const cur = document.getElementById('cur');
+    const total = document.getElementById('total');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    total.textContent = slides.length;
+
+    let idx = 0;
+    function show(i) {
+      idx = Math.max(0, Math.min(slides.length - 1, i));
+      slides.forEach((s, k) => s.classList.toggle('active', k === idx));
+      cur.textContent = idx + 1;
+    }
+    function next() { show(idx + 1); }
+    function prev() { show(idx - 1); }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') { e.preventDefault(); next(); }
+      else if (e.key === 'ArrowLeft' || e.key === 'PageUp' || e.key === 'Backspace') { e.preventDefault(); prev(); }
+      else if (e.key === 'Home') { e.preventDefault(); show(0); }
+      else if (e.key === 'End') { e.preventDefault(); show(slides.length - 1); }
+      else if (/^[1-9]$/.test(e.key)) { e.preventDefault(); show(parseInt(e.key, 10) - 1); }
+      else if (e.key === '0') { e.preventDefault(); show(9); }
+    });
+    prevBtn.addEventListener('click', prev);
+    nextBtn.addEventListener('click', next);
+    show(0);
+  })();
+</script>
+</body>
+</html>
