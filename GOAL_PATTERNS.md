@@ -109,7 +109,7 @@ Liberal_OS에 두 핵심 패턴을 **둘 다** 직접 커널 메커니즘으로 
 - T-84 `[x]` 호스트 retry_context 주입(mock 포함). files: `host/proxy_daemon.py`. depends: T-83. verify: mock 재시도 트랜스크립트에 누적 위반 사유가 다음 프롬프트에 포함됨 확인.
 
 ### Phase 9 — 패턴 B: 커널 시맨틱 캐시 단락
-- T-85 `[ ]` cache 골격 + FNV-1a + RAM 슬롯 exact get/set. files: `kernel/cache.{c,h}`, Makefile OBJS. depends: —. verify: `make clean && make` + `user/cachetest.c` exact hit/miss 단언.
+- T-85 `[~]` cache 골격 + FNV-1a + RAM 슬롯 exact get/set. files: `kernel/cache.{c,h}`, Makefile OBJS. depends: —. verify: `make clean && make` + `user/cachetest.c` exact hit/miss 단언.
 - T-86 `[ ]` MinHash 시그니처 + Jaccard 정수비 임계 + stopword/소문자/word-shingle. files: `kernel/cache.c`, `kernel/cache.h`. depends: T-85. verify: cachetest가 의역 프롬프트("list files" vs "please list the files") hit, 무관 프롬프트 miss 단언.
 - T-87 `[ ]` `/cache.bin` 디스크 오버레이(append/scan/promote). files: `kernel/cache.c`, (필요시 `mkfs/mkfs.c`). depends: T-86. verify: cachetest가 set→(재부팅 시뮬 또는 RAM 슬롯 비움)→디스크 scan hit 단언.
 - T-88 `[ ]` `sys_cacheget(30)`/`sys_cacheset(31)` 배선 + proxy_client 단락 통합. files: `kernel/syscall.{c,h}`, `kernel/sysproc.c`, `user/usys.pl`, `user/user.h`, `user/proxy_client.h`. depends: T-87. verify: `tests/test_cache.sh`가 동일/의역 프롬프트 반복 시 PROXY_REQ 송출 횟수가 distinct 프롬프트 수보다 적음(=캐시 hit으로 LLM 스킵) 확인.
