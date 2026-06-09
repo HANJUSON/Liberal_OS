@@ -29,3 +29,5 @@
 #define SYS_verifyfix   27
 #define SYS_checkpoint  28
 #define SYS_restore     29
+#define SYS_cacheget    30
+#define SYS_cacheset    31

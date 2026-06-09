@@ -36,7 +36,8 @@ OBJS = \
   $K/kernelvec.o \
   $K/plic.o \
   $K/virtio_disk.o \
-  $K/verifier.o
+  $K/verifier.o \
+  $K/cache.o
 
 # riscv64-unknown-elf- or riscv64-linux-gnu-
 # perhaps in /opt/riscv/bin
@@ -166,6 +167,7 @@ UPROGS=\
 	$U/_triage\
 	$U/_priotest\
 	$U/_verifiertest\
+	$U/_cachetest\
 
 fs.img: mkfs/mkfs README $(UPROGS) ../samples/short.log
 	@cp ../samples/short.log _short.log

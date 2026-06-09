@@ -8,6 +8,7 @@
 #include "sleeplock.h"
 #include "vm.h"
 #include "verifier.h"
+#include "cache.h"
 
 // Liberal_OS T-30+: a single kernel-side sleeplock serializing
 // proxy_call sequences. With multiple agent procs sharing /console
@@ -34,6 +35,7 @@ proxyinit(void)
   initsleeplock(&proxy_lock, "proxy");
   initlock(&ckpt.lock, "ckpt");
   ckpt.len = 0;
+  cacheinit();
 }
 
 uint64
@@ -345,4 +347,45 @@ sys_restore(void)
   if(n > 0 && copyout(myproc()->pagetable, dst, tmp, n) < 0)
     return -1;
   return n;
+}
+
+// sys_cacheget(const char *role, const char *prompt, char *out, int outmax)
+// Returns 1 on hit (value copied to out), 0 on miss, -1 on a bad argument.
+uint64
+sys_cacheget(void)
+{
+  char role[16], prompt[256], out[CACHE_VALLEN];
+  uint64 uout;
+  int outmax, hit;
+
+  if(argstr(0, role, sizeof(role)) < 0)
+    return -1;
+  if(argstr(1, prompt, sizeof(prompt)) < 0)
+    return -1;
+  argaddr(2, &uout);
+  argint(3, &outmax);
+
+  hit = cache_get(role, prompt, out, sizeof(out));
+  if(hit && uout != 0 && outmax > 0){
+    int n = outmax < (int)sizeof(out) ? outmax : (int)sizeof(out);
+    if(copyout(myproc()->pagetable, uout, out, n) < 0)
+      return -1;
+  }
+  return hit;
+}
+
+// sys_cacheset(const char *role, const char *prompt, const char *val)
+// Returns 1 on store, 0 if the table is full, -1 on a bad argument.
+uint64
+sys_cacheset(void)
+{
+  char role[16], prompt[256], val[CACHE_VALLEN];
+
+  if(argstr(0, role, sizeof(role)) < 0)
+    return -1;
+  if(argstr(1, prompt, sizeof(prompt)) < 0)
+    return -1;
+  if(argstr(2, val, sizeof(val)) < 0)
+    return -1;
+  return cache_set(role, prompt, val);
 }

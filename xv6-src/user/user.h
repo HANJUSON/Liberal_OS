@@ -35,6 +35,9 @@ int verifyfix(struct fix_proposal*, char*, int);
 // Pattern A: save/restore the last accepted state (kernel checkpoint slot).
 int checkpoint(void*, int);
 int restore(void*, int);
+// Pattern B: kernel response cache (exact-match get/set).
+int cacheget(const char*, const char*, char*, int);
+int cacheset(const char*, const char*, const char*);
 
 // ulib.c
 int stat(const char*, struct stat*);
