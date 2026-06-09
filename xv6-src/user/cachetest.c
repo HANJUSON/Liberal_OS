@@ -49,6 +49,24 @@ main(void)
   // (4) the same prompt under a different role misses (key includes role).
   fails += expect("role-sensitive miss", cacheget("classifier", "disk full at /var/log", out, sizeof(out)), 0);
 
+  // (5) semantic (paraphrase) hit: stored under one phrasing, retrieved
+  //     under a stopword-padded paraphrase that reduces to the same word
+  //     set ("list files" ~= "please list the files").
+  cacheset("parser", "list files", "LS-OUTPUT");
+  out[0] = 0;
+  fails += expect("semantic paraphrase hit",
+                  cacheget("parser", "please list the files", out, sizeof(out)), 1);
+  if(strcmp(out, "LS-OUTPUT") != 0){
+    printf("  FAIL: semantic value mismatch out=%s\n", out);
+    fails++;
+  } else {
+    printf("  ok: semantic value matches\n");
+  }
+
+  // (6) an unrelated prompt does not falsely hit semantically.
+  fails += expect("unrelated semantic miss",
+                  cacheget("parser", "reboot the database server now", out, sizeof(out)), 0);
+
   if(fails == 0)
     printf("CACHE_TEST_PASS\n");
   else
