@@ -133,6 +133,16 @@
 - **남은 블로커**: `qemu-system-riscv64` 미설치. 이 우분투(25.x)는 riscv64 에뮬레이터가 `qemu-system-misc`가 아니라 **별도 패키지 `qemu-system-riscv`**에 있음(`apt-cache policy qemu-system-riscv` → Installed: none, Candidate: 1:10.2.1+ds-1ubuntu3). QEMU 없이는 `make regression`/`make autotest`/모든 런타임 verify(T-81+) 불가 → T-80도 regression 게이트 때문에 `[x]` 확정 보류.
 - **필요한 사람 결정(좁혀짐)**: `sudo apt-get install -y qemu-system-riscv` 1건만 추가하면 루프 정상 재개. 설치 후 `qemu-system-riscv64 --version`으로 확인.
 
+#### 업데이트 2026-06-10 (loop 3/60) — 블로커 해소, T-80 DONE
+- `qemu-system-riscv64 10.2.1` 설치 확인.
+- **인프라 수리 2건** (T-NN 큐 외, 환경 손상 복구 — 툴체인·QEMU 재설치와 동일 성격):
+  1. **`xv6-src/mkfs/mkfs.c` 복원**: 표준 xv6-riscv mkfs 도구가 작업 트리에서 누락(git 이력에도 없음)되어 `fs.img` 빌드 불가였음. 프로젝트 헤더에 맞춰 복원(유일한 차이: upstream `LOGSIZE` → 이 프로젝트 `LOGBLOCKS`). `fs.img` 2000블록 정상 생성 확인. 온디스크 포맷(FSMAGIC/NDIRECT/superblock)은 표준과 동일.
+  2. **`tests/autotest.sh`·`tests/regression.sh`의 `timeout --foreground` → `timeout`**: 이 Claude Code 하네스에서 qemu를 포그라운드 프로세스 그룹으로 돌리면 job-control 시그널을 받아 즉사(exit 144)함. `--foreground` 제거로 qemu가 자체 프로세스 그룹을 가져 면역. 타임아웃 값·판정 로직(로그 grep)은 불변. (이 변경은 T-90 files 목록과 겹치지만 모든 verify 실행의 선행 조건이라 선반영.)
+- **운영 메모(하네스)**: 이 환경에서 QEMU 테스트는 반드시 **detached**로 실행 — `nohup <wrapper> </dev/null >/dev/null 2>&1 &`를 *일반 포그라운드 Bash 호출*로 띄우고(런처를 run_in_background로 감싸면 자식이 죽음), 결과 파일을 until-loop로 폴링. 포그라운드 직접 실행 금지(exit 144).
+- **검증 결과**: `make clean && make` 빌드 OK(verifier.o 링크). `make autotest` PASS. `make regression` 3-게이트 PASS. → **T-80 `[x]` 확정.**
+
+**블로커 상태: 해소됨.** 다음 작업 T-81(`sys_verifyfix(27)` 배선)부터 정상 진행.
+
 ### 5.1 보고 형식 (CLAUDE.md §10 동일)
 ```markdown
 ## T-NN: <작업명> — BLOCKED at <ISO timestamp>

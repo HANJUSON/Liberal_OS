@@ -56,7 +56,7 @@ pkill -f qemu-system-riscv64 >/dev/null 2>&1 || true
   # sequence — so the run finishes as soon as smoketest is done instead
   # of idling until the timeout fires.
   ( sleep 3; cat "$INPUT"; sleep 3; printf '\001x' ) \
-    | timeout --foreground "$TIMEOUT" qemu-system-riscv64 \
+    | timeout "$TIMEOUT" qemu-system-riscv64 \
         -machine virt -bios none -kernel kernel/kernel -m 128M -smp 3 -nographic \
         -global virtio-mmio.force-legacy=false \
         -drive file=fs.img,if=none,format=raw,id=x0 \

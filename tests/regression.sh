@@ -36,7 +36,7 @@ pkill -f qemu-system-riscv64 >/dev/null 2>&1 || true
 (
   cd "$XV6_DIR"
   ( sleep 3; printf 'ls\necho REGRESSION_SHELL_OK\n'; sleep 3; printf '\001x' ) \
-    | timeout --foreground 30 qemu-system-riscv64 \
+    | timeout 30 qemu-system-riscv64 \
         -machine virt -bios none -kernel kernel/kernel -m 128M -smp 3 -nographic \
         -global virtio-mmio.force-legacy=false \
         -drive file=fs.img,if=none,format=raw,id=x0 \
