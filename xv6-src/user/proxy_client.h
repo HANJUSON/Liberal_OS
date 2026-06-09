@@ -171,10 +171,30 @@ static inline int
 proxy_call(const char *role, const char *prompt, char *out, int outmax)
 {
   int r;
+  // Pattern B (T-88): consult the kernel response cache first. A hit
+  // short-circuits the host round-trip entirely — no PROXY_REQ is emitted,
+  // so the LLM call is skipped. We are outside the proxylock critical
+  // section because no request/response exchange occurs; the single-write
+  // CACHE_HIT marker stays atomic against sibling console writes via the
+  // kernel's cons_write_lock, and the host treats it as an observable note.
+  if (cacheget(role, prompt, out, outmax)) {
+    int fd = _proxy_fd();
+    if (fd >= 0) {
+      char hb[64];
+      int pos = 0;
+      _proxy_append_str(hb, &pos, sizeof(hb), "CACHE_HIT\t");
+      _proxy_append_str(hb, &pos, sizeof(hb), role);
+      hb[pos++] = '\n';
+      write(fd, hb, pos);
+    }
+    return strlen(out);
+  }
   proxylock();
   if (proxy_send(role, prompt) < 0) { proxyunlock(); return -1; }
   r = proxy_recv(out, outmax);
   proxyunlock();
+  if (r >= 0)
+    cacheset(role, prompt, out);   // populate the cache for next time
   return r;
 }
 
