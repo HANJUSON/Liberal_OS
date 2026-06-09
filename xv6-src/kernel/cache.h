@@ -37,7 +37,12 @@ uint64 cache_fnv1a(const char *role, const char *prompt);
 int    cache_get(const char *role, const char *prompt, char *out, int outmax);
 
 // Insert or update the value for (role, prompt). Returns 1 on store,
-// 0 if the table is full.
+// 0 if the table is full. Also appends the record to the /cache.bin
+// disk overlay (T-87).
 int    cache_set(const char *role, const char *prompt, const char *val);
+
+// Clear the RAM slot table. disk != 0 also truncates the /cache.bin
+// overlay. Used to isolate tests and to exercise disk-scan promotion.
+void   cache_clear(int disk);
 
 #endif // CACHE_H

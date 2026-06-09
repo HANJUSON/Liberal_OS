@@ -170,6 +170,19 @@ main(int argc, char *argv[])
     close(fd);
   }
 
+  // Liberal_OS T-87: pre-create an empty /cache.bin for the kernel response
+  // cache disk overlay. The kernel appends fixed-size records to it via
+  // writei (create() is static in the kernel, so the file must already
+  // exist). Size stays 0 until the first cache_set.
+  {
+    uint cinum = ialloc(T_FILE);
+    struct dirent cde;
+    memset(&cde, 0, sizeof(cde));
+    cde.inum = xshort(cinum);
+    strncpy(cde.name, "cache.bin", DIRSIZ);
+    iappend(rootino, &cde, sizeof(cde));
+  }
+
   // fix size of root inode dir
   rinode(rootino, &din);
   off = xint(din.size);

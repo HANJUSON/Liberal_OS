@@ -1,28 +1,28 @@
-// Liberal_OS Pattern B (T-85/T-86): kernel response cache.
+// Liberal_OS Pattern B (T-85/T-86/T-87): kernel response cache.
 //
 // T-85: FNV-1a exact-match RAM slots.
 // T-86: MinHash signatures over the prompt's word set give semantic
-//       (paraphrase) hits — when an exact lookup misses, a query whose
-//       word set overlaps a stored entry's by at least the Jaccard
-//       threshold (estimated from matching MinHash positions) hits. Words
-//       are ASCII-lowercased, punctuation-split, and stopword-filtered, so
-//       e.g. "list files" and "please list the files" reduce to the same
-//       word set and share an identical signature.
+//       (paraphrase) hits when an exact lookup misses.
+// T-87: /cache.bin disk overlay — every cache_set also appends a fixed-
+//       size record to /cache.bin, and a RAM miss falls through to a
+//       sequential scan of that file; a disk hit is promoted back into a
+//       RAM slot. This makes the cache survive RAM-slot eviction / reboot.
 //
-// See cache.h. Integer-only (no floating point).
+// Integer-only (no floating point). Disk I/O runs in process context
+// (from the cacheget/cacheset/cacheclear syscalls), never while holding
+// the RAM spinlock.
 
 #include "types.h"
+#include "riscv.h"
 #include "param.h"
 #include "spinlock.h"
+#include "sleeplock.h"
+#include "fs.h"
+#include "file.h"
+#include "defs.h"
 #include "cache.h"
 
-// From string.c / spinlock.c (declared locally to keep this unit
-// self-contained without pulling in the full defs.h surface).
-char* safestrcpy(char*, const char*, int);
-int   strncmp(const char*, const char*, uint);
-void  initlock(struct spinlock*, char*);
-void  acquire(struct spinlock*);
-void  release(struct spinlock*);
+#define CACHE_DISK_PATH "/cache.bin"
 
 static struct {
   struct spinlock lock;
@@ -140,16 +140,131 @@ sig_match(const uint64 *a, const uint64 *b)
   return m;
 }
 
+static int
+sig_over_threshold(int match)
+{
+  return match * CACHE_SIG_DEN >= CACHE_SIG_NUM * CACHE_SIG_K;
+}
+
+// ---- disk overlay (/cache.bin) ------------------------------------------
+// All three run in process context (syscall path) and must NOT be called
+// while holding cache.lock.
+
+static void
+cache_disk_append(const struct cache_slot *rec)
+{
+  struct inode *ip;
+
+  begin_op();
+  if ((ip = namei(CACHE_DISK_PATH)) == 0) {
+    end_op();
+    return;                                // overlay file absent: RAM-only
+  }
+  ilock(ip);
+  writei(ip, 0, (uint64)rec, ip->size, sizeof(*rec));
+  iunlockput(ip);
+  end_op();
+}
+
+// Scan /cache.bin for (key / role+signature). On hit copies the value into
+// out and, if promote != 0, the full record for RAM promotion. Last write
+// wins for exact-key matches.
+static int
+cache_disk_scan(const char *role, uint64 key, const uint64 *qsig,
+                char *out, int outmax, struct cache_slot *promote)
+{
+  struct inode *ip;
+  struct cache_slot rec, exact, sem;
+  int have_exact = 0, have_sem = 0, sem_match = -1;
+  uint off, sz;
+
+  begin_op();
+  if ((ip = namei(CACHE_DISK_PATH)) == 0) {
+    end_op();
+    return 0;
+  }
+  ilock(ip);
+  sz = ip->size;
+  for (off = 0; off + sizeof(rec) <= sz; off += sizeof(rec)) {
+    if (readi(ip, 0, (uint64)&rec, off, sizeof(rec)) != sizeof(rec))
+      break;
+    if (rec.key == key) {
+      exact = rec;
+      have_exact = 1;                      // keep scanning: last write wins
+    } else if (strncmp(rec.role, role, CACHE_ROLELEN) == 0) {
+      int m = sig_match(qsig, rec.sig);
+      if (m > sem_match) {
+        sem_match = m;
+        sem = rec;
+        have_sem = 1;
+      }
+    }
+  }
+  iunlockput(ip);
+  end_op();
+
+  if (have_exact) {
+    if (out && outmax > 0) safestrcpy(out, exact.val, outmax);
+    if (promote) *promote = exact;
+    return 1;
+  }
+  if (have_sem && sig_over_threshold(sem_match)) {
+    if (out && outmax > 0) safestrcpy(out, sem.val, outmax);
+    if (promote) *promote = sem;
+    return 1;
+  }
+  return 0;
+}
+
+static void
+cache_disk_truncate(void)
+{
+  struct inode *ip;
+
+  begin_op();
+  if ((ip = namei(CACHE_DISK_PATH)) == 0) {
+    end_op();
+    return;
+  }
+  ilock(ip);
+  itrunc(ip);
+  iunlockput(ip);
+  end_op();
+}
+
+// ---- RAM helpers --------------------------------------------------------
+
+// Insert/overwrite a full record into a RAM slot. Caller holds cache.lock.
+static void
+ram_put(const struct cache_slot *rec)
+{
+  int target = -1;
+  for (int i = 0; i < CACHE_NSLOT; i++) {
+    if (cache.slot[i].key == rec->key) { target = i; break; }
+  }
+  if (target < 0) {
+    for (int i = 0; i < CACHE_NSLOT; i++) {
+      if (cache.slot[i].key == 0) { target = i; break; }
+    }
+  }
+  if (target >= 0)
+    cache.slot[target] = *rec;
+}
+
+// ---- public API ---------------------------------------------------------
+
 int
 cache_get(const char *role, const char *prompt, char *out, int outmax)
 {
   uint64 k = cache_fnv1a(role, prompt);
   uint64 qsig[CACHE_SIG_K];
+  struct cache_slot promo;
   int best = -1, best_match = -1;
 
-  acquire(&cache.lock);
+  cache_sig(prompt, qsig);                  // pure; safe outside the lock
 
-  // Exact match first.
+  acquire(&cache.lock);
+  // Exact RAM match.
   for (int i = 0; i < CACHE_NSLOT; i++) {
     if (cache.slot[i].key == k) {
       if (out && outmax > 0)
@@ -158,66 +273,71 @@ cache_get(const char *role, const char *prompt, char *out, int outmax)
       return 1;
     }
   }
-
-  // Semantic match: best same-role slot whose signature overlap clears the
-  // Jaccard threshold.
-  cache_sig(prompt, qsig);
+  // Semantic RAM match.
   for (int i = 0; i < CACHE_NSLOT; i++) {
     if (cache.slot[i].key == 0)
       continue;
     if (strncmp(cache.slot[i].role, role, CACHE_ROLELEN) != 0)
       continue;
     int m = sig_match(qsig, cache.slot[i].sig);
-    if (m > best_match) {
-      best_match = m;
-      best = i;
-    }
+    if (m > best_match) { best_match = m; best = i; }
   }
-  if (best >= 0 && best_match * CACHE_SIG_DEN >= CACHE_SIG_NUM * CACHE_SIG_K) {
+  if (best >= 0 && sig_over_threshold(best_match)) {
     if (out && outmax > 0)
       safestrcpy(out, cache.slot[best].val, outmax);
     release(&cache.lock);
     return 1;
   }
-
   release(&cache.lock);
+
+  // RAM miss: fall through to the disk overlay, promoting any hit.
+  if (cache_disk_scan(role, k, qsig, out, outmax, &promo)) {
+    acquire(&cache.lock);
+    ram_put(&promo);
+    release(&cache.lock);
+    return 1;
+  }
   return 0;
 }
 
 int
 cache_set(const char *role, const char *prompt, const char *val)
 {
-  uint64 k = cache_fnv1a(role, prompt);
-  uint64 sig[CACHE_SIG_K];
-  int stored = 0;
+  struct cache_slot rec;
+  int stored;
 
-  cache_sig(prompt, sig);
+  rec.key = cache_fnv1a(role, prompt);
+  safestrcpy(rec.role, role, CACHE_ROLELEN);
+  cache_sig(prompt, rec.sig);
+  safestrcpy(rec.val, val, CACHE_VALLEN);
 
   acquire(&cache.lock);
-  // Update an existing entry for this key first, else take an empty slot.
-  int target = -1;
+  // ram_put always succeeds while a slot is free; report table-full as 0.
+  int free_or_match = 0;
   for (int i = 0; i < CACHE_NSLOT; i++) {
-    if (cache.slot[i].key == k) {
-      target = i;
+    if (cache.slot[i].key == rec.key || cache.slot[i].key == 0) {
+      free_or_match = 1;
       break;
     }
   }
-  if (target < 0) {
-    for (int i = 0; i < CACHE_NSLOT; i++) {
-      if (cache.slot[i].key == 0) {
-        target = i;
-        break;
-      }
-    }
-  }
-  if (target >= 0) {
-    cache.slot[target].key = k;
-    safestrcpy(cache.slot[target].role, role, CACHE_ROLELEN);
-    for (int j = 0; j < CACHE_SIG_K; j++)
-      cache.slot[target].sig[j] = sig[j];
-    safestrcpy(cache.slot[target].val, val, CACHE_VALLEN);
-    stored = 1;
-  }
+  if (free_or_match)
+    ram_put(&rec);
+  stored = free_or_match;
   release(&cache.lock);
+
+  if (stored)
+    cache_disk_append(&rec);               // persist to the overlay
   return stored;
+}
+
+void
+cache_clear(int disk)
+{
+  acquire(&cache.lock);
+  for (int i = 0; i < CACHE_NSLOT; i++)
+    cache.slot[i].key = 0;                  // mark every slot empty
+  release(&cache.lock);
+
+  if (disk)
+    cache_disk_truncate();
 }

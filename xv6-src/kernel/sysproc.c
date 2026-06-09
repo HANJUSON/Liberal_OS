@@ -389,3 +389,14 @@ sys_cacheset(void)
     return -1;
   return cache_set(role, prompt, val);
 }
+
+// sys_cacheclear(int disk): clear the RAM cache; disk != 0 also truncates
+// the /cache.bin overlay. Returns 0.
+uint64
+sys_cacheclear(void)
+{
+  int disk;
+  argint(0, &disk);
+  cache_clear(disk);
+  return 0;
+}

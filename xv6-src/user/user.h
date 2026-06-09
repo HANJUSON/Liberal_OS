@@ -38,6 +38,7 @@ int restore(void*, int);
 // Pattern B: kernel response cache (exact-match get/set).
 int cacheget(const char*, const char*, char*, int);
 int cacheset(const char*, const char*, const char*);
+int cacheclear(int);
 
 // ulib.c
 int stat(const char*, struct stat*);

@@ -52,3 +52,4 @@ entry("checkpoint");
 entry("restore");
 entry("cacheget");
 entry("cacheset");
+entry("cacheclear");

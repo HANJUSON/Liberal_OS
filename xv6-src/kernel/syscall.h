@@ -31,3 +31,4 @@
 #define SYS_restore     29
 #define SYS_cacheget    30
 #define SYS_cacheset    31
+#define SYS_cacheclear  32

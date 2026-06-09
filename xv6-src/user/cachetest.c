@@ -28,6 +28,9 @@ main(void)
   int fails = 0;
   char out[192];
 
+  // Isolate from any persisted /cache.bin records from a prior run.
+  cacheclear(1);
+
   // (1) miss before anything is stored.
   fails += expect("miss before set", cacheget("parser", "disk full at /var/log", out, sizeof(out)), 0);
 
@@ -66,6 +69,21 @@ main(void)
   // (6) an unrelated prompt does not falsely hit semantically.
   fails += expect("unrelated semantic miss",
                   cacheget("parser", "reboot the database server now", out, sizeof(out)), 0);
+
+  // (7) disk overlay: a set persists to /cache.bin; after clearing the RAM
+  //     slots only (simulating eviction/reboot), a get must still hit via a
+  //     sequential disk scan and promote the record back into RAM.
+  cacheset("rootcause", "persist this entry", "DISK-PERSISTED");
+  cacheclear(0);                       // RAM only; /cache.bin retains it
+  out[0] = 0;
+  fails += expect("disk-scan hit after RAM clear",
+                  cacheget("rootcause", "persist this entry", out, sizeof(out)), 1);
+  if(strcmp(out, "DISK-PERSISTED") != 0){
+    printf("  FAIL: disk value mismatch out=%s\n", out);
+    fails++;
+  } else {
+    printf("  ok: disk value matches\n");
+  }
 
   if(fails == 0)
     printf("CACHE_TEST_PASS\n");
