@@ -81,9 +81,12 @@ exist.
 The course guideline §2 demands that at least one — preferably more —
 of *processes, threads, synchronisation, scheduling, virtual memory,
 file systems, IPC, system calls* be **directly designed and
-implemented**. Liberal_OS **directly implements seven** OS concepts
-in modified xv6 source and **uses one more** (file system) without
-modification; rows below are split accordingly:
+implemented**. Liberal_OS **directly implements seven** core OS concepts
+in modified xv6 source (rows 1–7), **extends them with two Phase 8/9
+kernel subsystems** — a fix verifier and a semantic response cache
+(rows 8–9, the *verify+rollback* and *semantic-cache* patterns) — and
+**uses one more** concept (the file system, read-only for input) as the
+final row:
 
 | # | Liberal_OS component | OS concept | xv6 file(s) modified | Implementation summary |
 |---|---|---|---|---|
@@ -94,9 +97,12 @@ modification; rows below are split accordingly:
 | 5 | Differentiated agent service | **Scheduling (priority)** | `proc.c` `scheduler()` | Two-pass selection (max-priority RUNNABLE first, multi-CPU fallback) plus `setprio(int)` syscall clamped to nice-style `[-20, 19]`. Default `priority = 0` reduces to baseline Round Robin. |
 | 6 | Fault containment | **Process isolation** | inherent in xv6 | Each agent is its own `struct proc` with its own page table; the `procfields` user-space smoke confirms that fork+pipe semantics are not regressed by our struct extension. |
 | 7 | Observability | **System calls** | `syscall.c/h`, `sysproc.c`, `user.h`, `usys.pl` | Six new syscalls: `setrole(22)`, `agentstat(23)`, `proxylock(24)`, `proxyunlock(25)`, `setprio(26)`. `agentstat` walks the proc table and emits a one-line JSON snapshot. |
+| 8 | Kernel-arbitrated fix verification + rollback (**Pattern A**) | **System calls + synchronisation** | `verifier.{c,h}`, `sysproc.c`, new syscalls 27–29 | The LLM is only a *proposer*; the kernel holds final authority. A pure verifier `verify_fix()` checks each fix proposal's structural integrity, numeric ranges, action whitelist, and a protected-process rule. `verifyfix(27)` resolves proc state into a `sys_snapshot` so the verifier never walks `proc[]`; `checkpoint(28)`/`restore(29)` (a spinlock-guarded kernel slot) roll back to the last accepted state on rejection. The evaluator's bounded retry loop drives **VERIFY FAIL → ROLLBACK → RETRY → ACCEPT**. |
+| 9 | Kernel semantic response cache (**Pattern B**) | **File system + system calls** | `cache.{c,h}`, `mkfs.c`, new syscalls 30–32 | A 64-slot RAM table keyed by FNV-1a(`role\|prompt`) with per-entry MinHash signatures for paraphrase (semantic) hits via an integer Jaccard threshold, backed by a `/cache.bin` **disk overlay** (append on set; sequential scan + RAM promotion on miss) through the inode API (`writei`/`readi`). `cacheget(30)`/`cacheset(31)`/`cacheclear(32)` expose it; `proxy_call` consults the cache first and **short-circuits the PROXY_REQ (the LLM call) on a hit**. This is also where the kernel *writes* to the xv6 file system, beyond the read-only input use in the final row. |
 | — | Input persistence | **File system (used, *not* modified)** | none — uses xv6's existing fs | The input log lives as a real file in the xv6 file system (`short.log`, copied in at `fs.img` build time); agents read it through standard `open(2)` / `read(2)`. This row is listed for completeness — we did **not** add to xv6's filesystem code, so it does **not** count toward the seven directly-implemented concepts above. |
 
-The directly-implemented count (rows 1–7) already exceeds GuideLine
+The directly-implemented count (rows 1–7, plus the two Phase 8/9
+subsystems in rows 8–9) already exceeds GuideLine
 §2's "at least one, preferably more" requirement by a wide margin;
 we keep the file-system row visible because the killer scenario *does*
 flow data through real xv6 I/O rather than a back-channel, even
@@ -669,6 +675,50 @@ into instant (~1.5 s) demos.
    180–240 s harness budget.
 4. A stderr trace (`[live] <role> CALL/DONE`) was added for
    diagnosis and is shown in `out/screenshots/screenshot3.png`.
+
+### §10.8 Phase 8/9 — verify+rollback and semantic cache (Patterns A & B)
+
+Two later patterns push the "OS for LLM" thesis past plumbing into
+*kernel arbitration of model output* and *kernel-side reuse of model
+output*. Both are exercised deterministically in mock mode.
+
+**Pattern A — verify+rollback closed loop (§3 row 8).** The design
+principle is the inverted authority: the LLM proposes, the kernel
+disposes. `verify_fix()` is a pure, integer-only function (no floating
+point, no proc-table access) checking four invariants — required-field
+integrity, numeric range (`severity ∈ [0,3]`, `retry_hint ≥ 0`), an
+action whitelist (`{REPORT, ANNOTATE, REQUEUE}`), and a protected-process
+rule (no destructive action against `init`/`sh`/`evaluator`). The syscall
+layer (`sys_verifyfix`) resolves any needed process state into a
+`sys_snapshot` so the verifier stays a unit-testable pure function — this
+also keeps the scheduler/`proc.c` core untouched (a human-gated region).
+On rejection the evaluator `restore()`s the last `checkpoint()`ed state,
+appends the violation reason to its retry context, and retries (bounded to
+three attempts, preserving the T-41 budget). *Measured (mock,
+`triage short.log`):* the two `ERROR` log lines each take the full
+**VERIFY FAIL → ROLLBACK → RETRY → ACCEPT** path (`eval_retries = 2`), all
+five lines ultimately accepted; the host injects the accumulated violation
+reasons into the next prompt (`retry_injections = 6`,
+`retry_context = ["severity out of range [0,3]", …]`).
+
+**Pattern B — kernel semantic cache short-circuit (§3 row 9).** Before an
+agent issues a `PROXY_REQ`, `proxy_call` consults a kernel cache. An exact
+FNV-1a key miss falls back to MinHash signatures (double-hashed,
+stopword-filtered, ASCII-folded word shingles) compared by an integer
+Jaccard threshold, so paraphrases such as *"list files"* and *"please list
+the files"* collapse to one entry. A `/cache.bin` disk overlay (append on
+set, sequential scan + RAM promotion on miss) makes entries survive RAM
+eviction and reboot. *Measured (mock, `triage short.log`):* the
+evaluator's verify-driven retry re-issues an identical `(role, prompt)`,
+which the cache serves without a host round-trip — `served[evaluator] =
+served[parser] = 5` despite `eval_retries = 2`, i.e. **two LLM calls
+skipped** (`proxy_reqs_saved = 2`). Pattern B's win is *capability and
+cost* (fewer model calls, paraphrase reuse), independent of the
+`proxy_lock` serialisation discussed in §10.4.
+
+Both patterns are folded into the regression gate (`test_verifier.sh`,
+`test_cache.sh`) and captured together in one run by
+`bench/capture_patterns.py` → `docs/patterns_demo.txt`.
 
 ---
 
