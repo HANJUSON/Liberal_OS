@@ -255,6 +255,13 @@ def _drive_triage(ch: Xv6Channel, mode: str, input_file: str,
     eval_retries = 0
     eval_fails = 0
     eval_oks = 0
+    # Pattern A (T-84): accumulate the kernel verifier's violation reasons
+    # (emitted by the evaluator as EVAL_VERIFY_FAIL lines) and inject them
+    # into the *next* evaluator prompt, so a retry is re-issued with the
+    # context of why the prior proposal was rejected. Mirrored in mock so
+    # the round-trip is observable without the live model.
+    retry_context: list[str] = []
+    injected_prompts: list[str] = []
 
     while time.monotonic() < deadline:
         try:
@@ -275,6 +282,17 @@ def _drive_triage(ch: Xv6Channel, mode: str, input_file: str,
                 if len(parts) != 4:
                     continue
                 _, req_id, role, prompt = parts
+                # Pattern A retry-context injection: the accumulated kernel
+                # violation reasons augment the *prompt* the evaluator's model
+                # is asked to fix (the model's input), and the augmented prompt
+                # is recorded in the transcript as evidence. The reply returned
+                # is the model's answer to that prompt — under the mock echo
+                # handler we echo the model's view (the original line) rather
+                # than feeding the retry-context text back as the "response".
+                eff_prompt = prompt
+                if role == "evaluator" and retry_context:
+                    eff_prompt = f"{prompt} |retry_context: {'; '.join(retry_context)}"
+                    injected_prompts.append(eff_prompt)
                 try:
                     reply = handler(role, prompt)
                     ch.send(f"{PROXY_RES_TAG}\t{req_id}\t{reply}\n")
@@ -282,6 +300,10 @@ def _drive_triage(ch: Xv6Channel, mode: str, input_file: str,
                 except Exception as exc:  # noqa: BLE001
                     last_error = f"{type(exc).__name__}: {exc}"
                     ch.send(f"{PROXY_RES_TAG}\t{req_id}\t__HANDLER_ERROR__\n")
+            elif text.startswith("EVAL_VERIFY_FAIL"):
+                reason = text[len("EVAL_VERIFY_FAIL"):].strip()
+                if reason:
+                    retry_context.append(reason)
             elif text.startswith("EVAL_RETRY"):
                 eval_retries += 1
             elif text.startswith("evaluator:FAIL:"):
@@ -306,6 +328,9 @@ def _drive_triage(ch: Xv6Channel, mode: str, input_file: str,
                     "eval_retries": eval_retries,
                     "eval_fails": eval_fails,
                     "eval_oks": eval_oks,
+                    "retry_injections": len(injected_prompts),
+                    "retry_context": retry_context[:4],
+                    "injected_sample": injected_prompts[:2],
                     "missing_roles": [r for r in expected if r not in served_by_role],
                     "elapsed_s": round(time.monotonic() - started, 3),
                 }

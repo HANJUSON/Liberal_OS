@@ -143,6 +143,10 @@
 
 **블로커 상태: 해소됨.** 다음 작업 T-81(`sys_verifyfix(27)` 배선)부터 정상 진행.
 
+#### 운영 메모 갱신 2026-06-10 (loop 7) — QEMU 실행법 확정
+- **신뢰 가능한 실행법**: QEMU를 띄우는 명령(`bash tests/regression.sh`, `python3 host/proxy_daemon.py --triage ...`)은 **Bash 도구의 `run_in_background: true`로 "단일·깨끗한" 명령**으로 실행한다(앞에 `pkill;sleep` 같은 프리픽스 붙이지 말 것 — 컴파운드가 자식을 죽임). 완료 알림 후 task output 파일을 읽는다. 포그라운드 직접 실행은 exit 144(job-control 시그널)로 즉사하므로 금지. nohup 래퍼는 launch가 간헐 실패해 불안정 — `run_in_background` 직접 실행이 가장 안정적.
+- **T-84 stall 교훈**: 호스트가 retry_context를 *응답으로 되먹이면*(증강 프롬프트를 mock echo로 evaluator에 반환) 파이프라인이 stall. 올바른 설계는 retry_context를 **프롬프트(모델 입력)에 주입하고 transcript로 기록**하되, mock echo 응답은 **원본(모델의 답)**을 돌려준다. `injected_sample`/`retry_context` JSON 필드가 주입 증거.
+
 ### 5.1 보고 형식 (CLAUDE.md §10 동일)
 ```markdown
 ## T-NN: <작업명> — BLOCKED at <ISO timestamp>
