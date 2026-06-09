@@ -93,6 +93,28 @@
 - T-71 `[x]` Development Process Document (`PROCESS.md`)
 - T-72 `[x]` 영어 슬라이드 초안 (`slides/draft.md`)
 
+### Phase 8 — 패턴 A: 검증+롤백 닫힌 루프 (GOAL_PATTERNS T-80~84)
+- T-80 `[x]` verifier 골격 — `kernel/verifier.{c,h}` 순수 함수 `verify_fix()` (구조·범위·화이트리스트·보호프로세스 4불변식, 정수 전용). 커밋 `a6791c5`.
+- T-81 `[x]` `sys_verifyfix(27)` 배선 + `sys_snapshot` 채움 (proc 테이블은 sysproc.c에서 읽어 verifier로 전달, scheduler 미수정). `user/verifiertest.c` 5단언 PASS. 커밋 `cfb681e`.
+- T-82 `[x]` `checkpoint(28)`/`restore(29)` + 스핀락 보호 커널 슬롯(proxyinit 초기화 → main.c 미수정). 왕복 단언 PASS. 커밋 `cc659ec`.
+- T-83 `[x]` evaluator에 verify→FAIL시 restore+retry, PASS시 checkpoint 통합. `tests/test_verifier.sh`로 VERIFY FAIL→ROLLBACK→RETRY→ACCEPT 재현(eval_retries=2). 커밋 `dbde9a3`.
+- T-84 `[x]` 호스트 retry_context 주입 — `EVAL_VERIFY_FAIL` 사유 누적해 다음 evaluator 프롬프트에 주입·기록(retry_injections=6). 커밋 `fb30f6b`.
+
+### Phase 9 — 패턴 B: 커널 시맨틱 캐시 단락 (GOAL_PATTERNS T-85~88)
+- T-85 `[x]` FNV-1a exact RAM 캐시 + `cacheget(30)/cacheset(31)` 시스콜(T-88 배선 선반영). `user/cachetest.c` exact hit/miss PASS. 커밋 `0de6265`.
+- T-86 `[x]` MinHash 시그니처 + Jaccard 정수비(2/5) + stopword/소문자/word-shingle. 의역("list files"≡"please list the files") hit, 무관 miss. 커밋 `ce67bfa`.
+- T-87 `[x]` `/cache.bin` 디스크 오버레이(inode API append/scan/promote) + `cacheclear(32)`. mkfs가 빈 파일 선생성. set→RAM clear→디스크 scan hit PASS. 커밋 `50426a2`.
+- T-88 `[x]` `proxy_call` 캐시 단락(hit 시 PROXY_REQ 생략 + CACHE_HIT 마커) + `tests/test_cache.sh`. proxy_reqs_saved=2 확인. 커밋 `4c60bcb`.
+
+### Phase 10 — 통합·증거·완료 게이트 (GOAL_PATTERNS T-89~93)
+- T-89 `[x]` 두 패턴 동시 e2e 캡처 — `bench/capture_patterns.py` → `docs/patterns_demo.txt` (VERIFY_FAIL=2 ROLLBACK=2 RETRY=2 ACCEPT=5 CACHE_HIT=2). 커밋 `c4e9f1c`.
+- T-90 `[x]` regression 3→5단계(+test_verifier+test_cache), autotest 스모크에 verifiertest/cachetest 추가. 커밋 `6050989`.
+- T-91 `[x]` TECHNICAL_REPORT §3 매핑표 +2행(verifier·cache) + §10.8 두 패턴 서술. 커밋 `16662f8`.
+- T-92 `[x]` 본 STATUS Phase 8/9/10 완료 기록(이 항목). README 갱신 권장은 §5 참조.
+- T-93 `[ ]` 최종 완료 게이트(§6) 실행 — 다음 작업.
+
+**신규 시스콜 누적**: `verifyfix(27)`, `checkpoint(28)`, `restore(29)`, `cacheget(30)`, `cacheset(31)`, `cacheclear(32)` — 기존 26 → 32. 신규 커널 파일: `verifier.{c,h}`, `cache.{c,h}`.
+
 ---
 
 ## 4. 남은 사람 작업 (자율 처리 불가)
@@ -149,6 +171,9 @@
 
 #### 작업 분할 조정 2026-06-10 (loop 8) — T-85/T-88 시스콜 경계
 - T-85 verify가 `cachetest.c`의 exact hit/miss 단언을 요구하는데, 유저 프로그램이 커널 캐시에 닿으려면 시스콜이 필수다. 따라서 **`cacheget(30)/cacheset(31)` 시스콜 배선(명목상 T-88)을 T-85에 선반영**했다(검증 가능한 최소 단위). 건드린 추가 파일: `syscall.{c,h}`, `sysproc.c`, `usys.pl`, `user.h`, `Makefile` UPROGS, `user/cachetest.c`. **T-88의 남은 범위 = `proxy_client.h` 단락 통합 + `tests/test_cache.sh` + 재검증**으로 좁아짐.
+
+#### README 갱신 권장 2026-06-10 (T-92) — 사람 작업
+- `README.md`는 동결 문서(CC 수정 금지)라 **수정하지 않았다.** 현재 README §3 OS-매핑표는 Phase 8/9 이전 상태(시스콜 7종, 패턴 A/B 미반영)다. **사람이 README에 반영 권장**: (1) §3 매핑표에 verifier(시스콜 27–29)·semantic cache(시스콜 30–32, `/cache.bin` 디스크 오버레이) 2행, (2) 신규 시스콜 6종(26→32)·신규 커널 파일(`verifier.{c,h}`, `cache.{c,h}`), (3) §5 실행법의 `make regression`이 5단계(+test_verifier/test_cache)임. 상세 서술은 `docs/TECHNICAL_REPORT.md` §3 row 8/9 + §10.8에 이미 있으니 옮기면 됨.
 
 ### 5.1 보고 형식 (CLAUDE.md §10 동일)
 ```markdown
