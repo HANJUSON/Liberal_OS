@@ -110,7 +110,23 @@
 
 ## 5. 블로커
 
-**현재 막힌 항목 없음.**
+### T-80 (및 GOAL_PATTERNS 루프 전체) — BLOCKED at 2026-06-10 (loop 1/60)
+
+**증상**: RISC-V 빌드 게이트(`make clean && make`)와 모든 QEMU 기반 verify(`make autotest`/`make regression`)가 툴체인 부재로 실행 불가. `make`가 `riscv64-*-gcc`를 못 찾아 host `gcc`로 폴백 → `-march=rv64gc` 거부.
+
+**시도한 것**:
+- `make clean && make` → `cc1: error: bad value 'rv64gc' for '-march='` (host gcc 폴백).
+- 툴체인 프로브: `riscv64-unknown-elf-gcc`, `riscv64-linux-gnu-gcc`, `riscv64-elf-gcc`, `riscv64-none-elf-gcc`, `riscv64-unknown-linux-gnu-gcc` **전부 missing**.
+- `qemu-system-riscv64` **missing**.
+- 작성한 `kernel/verifier.{c,h}`는 host `gcc -fsyntax-only -Wall -Werror -ffreestanding`로 **문법/타입 PASS** (실제 riscv 빌드 게이트의 대체는 아님).
+
+**가설**: 이 환경(WSL2)이 §5.2의 2026-05-20 검증 시점과 달라져 RISC-V GCC/binutils와 QEMU가 미설치 상태. 코드 결함이 아니라 빌드 환경 부재.
+
+**필요한 사람 결정**: 툴체인 설치 필요 —
+`sudo apt-get install -y gcc-riscv64-linux-gnu gdb-multiarch qemu-system-misc make python3 python3-pip`
+(`sudo`/네트워크 설치는 CLAUDE.md §5에서 CC 금지 → 사람 작업). 설치 후 `cd xv6-src && make qemu`로 부팅 확인되면 루프 재개 가능. 그 전까지 §4 작업 큐 전체가 빌드/QEMU 의존이라 자율 진행 불가.
+
+**현재 상태**: T-80 코드는 작성·커밋됨(WIP, riscv 빌드 미검증이라 `[~]` 유지). 툴체인 복구 시 `make clean && make`로 T-80 verify부터 재개.
 
 ### 5.1 보고 형식 (CLAUDE.md §10 동일)
 ```markdown
