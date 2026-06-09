@@ -63,6 +63,20 @@ main(void)
   mkproposal(&p, 0, "parser", FIX_ACTION_REPORT, 0, 0);
   fails += expect("bad: empty role", verifyfix(&p, reason, sizeof(reason)), VERIFY_ERR_FIELD);
 
+  // (6) checkpoint/restore round-trip: save a good state, clobber a local
+  //     copy, restore, and confirm the original bytes come back. This is
+  //     the rollback primitive Pattern A uses after a failed verify.
+  {
+    char saved[16], scratch[16];
+    memset(saved, 0, sizeof(saved));
+    strcpy(saved, "ACCEPTED-v1");
+    fails += expect("checkpoint len", checkpoint(saved, sizeof(saved)), (int)sizeof(saved));
+    memset(scratch, 0, sizeof(scratch));
+    strcpy(scratch, "CLOBBERED");
+    fails += expect("restore len", restore(scratch, sizeof(scratch)), (int)sizeof(saved));
+    fails += expect("restore data matches", strcmp(scratch, "ACCEPTED-v1") == 0, 1);
+  }
+
   if(fails == 0)
     printf("VERIFIER_TEST_PASS\n");
   else

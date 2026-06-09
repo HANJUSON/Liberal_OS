@@ -32,6 +32,9 @@ int setprio(int);
 // Pattern A: kernel-side fix verifier (struct fix_proposal in kernel/verifier.h).
 struct fix_proposal;
 int verifyfix(struct fix_proposal*, char*, int);
+// Pattern A: save/restore the last accepted state (kernel checkpoint slot).
+int checkpoint(void*, int);
+int restore(void*, int);
 
 // ulib.c
 int stat(const char*, struct stat*);

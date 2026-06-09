@@ -107,6 +107,8 @@ extern uint64 sys_proxylock(void);
 extern uint64 sys_proxyunlock(void);
 extern uint64 sys_setprio(void);
 extern uint64 sys_verifyfix(void);
+extern uint64 sys_checkpoint(void);
+extern uint64 sys_restore(void);
 
 // An array mapping syscall numbers from syscall.h
 // to the function that handles the system call.
@@ -138,6 +140,8 @@ static uint64 (*syscalls[])(void) = {
 [SYS_proxyunlock] sys_proxyunlock,
 [SYS_setprio]     sys_setprio,
 [SYS_verifyfix]   sys_verifyfix,
+[SYS_checkpoint]  sys_checkpoint,
+[SYS_restore]     sys_restore,
 };
 
 void

@@ -27,3 +27,5 @@
 #define SYS_proxyunlock 25
 #define SYS_setprio     26
 #define SYS_verifyfix   27
+#define SYS_checkpoint  28
+#define SYS_restore     29

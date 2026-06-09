@@ -16,10 +16,24 @@
 // steal each other's PROXY_RES bytes. Initialized once from main().
 struct sleeplock proxy_lock;
 
+// Liberal_OS Pattern A (T-82): a single fixed-size kernel checkpoint slot
+// holding the last accepted agent state. sys_checkpoint saves a user blob
+// into it; sys_restore copies it back so a failed verify can roll back to
+// the last good state. Kept global (not a per-proc field) so proc.c and
+// the scheduler stay untouched (HUMAN GATE).
+#define CKPT_MAX 256
+struct {
+  struct spinlock lock;
+  int  len;              // 0 = nothing checkpointed yet
+  char buf[CKPT_MAX];
+} ckpt;
+
 void
 proxyinit(void)
 {
   initsleeplock(&proxy_lock, "proxy");
+  initlock(&ckpt.lock, "ckpt");
+  ckpt.len = 0;
 }
 
 uint64
@@ -278,4 +292,57 @@ sys_verifyfix(void)
       return -100;
   }
   return (uint64)(long)rc;   // sign-extend so user int sees -1..-4
+}
+
+// sys_checkpoint(void *src, int len): save up to CKPT_MAX bytes of user
+// state into the kernel checkpoint slot. Returns bytes stored, or -1 on a
+// bad length / fault.
+uint64
+sys_checkpoint(void)
+{
+  uint64 src;
+  int len;
+  char tmp[CKPT_MAX];
+
+  argaddr(0, &src);
+  argint(1, &len);
+  if(len < 0 || len > CKPT_MAX)
+    return -1;
+  if(len > 0 && copyin(myproc()->pagetable, tmp, src, len) < 0)
+    return -1;
+
+  acquire(&ckpt.lock);
+  if(len > 0)
+    memmove(ckpt.buf, tmp, len);
+  ckpt.len = len;
+  release(&ckpt.lock);
+  return len;
+}
+
+// sys_restore(void *dst, int len): copy the checkpointed state back to the
+// user buffer (truncated to len). Returns bytes restored; 0 means nothing
+// has been checkpointed; -1 on fault.
+uint64
+sys_restore(void)
+{
+  uint64 dst;
+  int len, n;
+  char tmp[CKPT_MAX];
+
+  argaddr(0, &dst);
+  argint(1, &len);
+  if(len < 0)
+    return -1;
+
+  acquire(&ckpt.lock);
+  n = ckpt.len;
+  if(n > len)
+    n = len;
+  if(n > 0)
+    memmove(tmp, ckpt.buf, n);
+  release(&ckpt.lock);
+
+  if(n > 0 && copyout(myproc()->pagetable, dst, tmp, n) < 0)
+    return -1;
+  return n;
 }

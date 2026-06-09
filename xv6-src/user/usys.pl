@@ -48,3 +48,5 @@ entry("proxylock");
 entry("proxyunlock");
 entry("setprio");
 entry("verifyfix");
+entry("checkpoint");
+entry("restore");
