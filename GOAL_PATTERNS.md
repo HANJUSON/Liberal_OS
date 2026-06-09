@@ -116,7 +116,7 @@ Liberal_OS에 두 핵심 패턴을 **둘 다** 직접 커널 메커니즘으로 
 
 ### Phase 10 — 통합·증거·완료 게이트
 - T-89 `[x]` 두 패턴 동시 동작 e2e: `triage short.log`가 (a) 검증 reject→retry와 (b) 캐시 hit을 모두 보이는 트랜스크립트 캡처. files: `bench/capture_demo.py`(또는 신규 `bench/capture_patterns.py`), `docs/patterns_demo.txt`. depends: T-84, T-88. verify: `docs/patterns_demo.txt`에 "VERIFY FAIL"/"ROLLBACK"/"RETRY"/"ACCEPT"와 "CACHE HIT" 라인 모두 존재.
-- T-90 `[ ]` `tests/regression.sh`에 test_verifier.sh + test_cache.sh 편입, autotest 스모크에 verifiertest/cachetest 추가. files: `tests/regression.sh`, `tests/autotest.sh`. depends: T-89. verify: `make regression` 3-게이트+신규 2테스트 모두 PASS.
+- T-90 `[~]` `tests/regression.sh`에 test_verifier.sh + test_cache.sh 편입, autotest 스모크에 verifiertest/cachetest 추가. files: `tests/regression.sh`, `tests/autotest.sh`. depends: T-89. verify: `make regression` 3-게이트+신규 2테스트 모두 PASS.
 - T-91 `[ ]` `docs/TECHNICAL_REPORT.md` §3 OS-개념 매핑표에 검증기 시스콜·캐시 서브시스템 행 추가, §5/§10에 두 패턴 설계·근거 서술. files: `docs/TECHNICAL_REPORT.md`. depends: T-90. verify: 표에 신규 2개 메커니즘 행 존재(grep).
 - T-92 `[ ]` `STATUS.md §3`에 Phase 8/9/10 완료 기록, README 갱신 필요분은 **수정하지 말고** §5에 "사람 갱신 권장" 한 줄로 기록. files: `STATUS.md`. depends: T-91. verify: STATUS에 T-80~T-92 결과 요약 존재.
 - T-93 `[ ]` **최종 완료 게이트 실행**(§6). files: —. depends: T-92. verify: §6의 모든 항목 PASS → 본 작업을 `[x]`로 표기하고 루프 DONE 선언.
