@@ -128,6 +128,11 @@
 
 **현재 상태**: T-80 코드는 작성·커밋됨(WIP, riscv 빌드 미검증이라 `[~]` 유지). 툴체인 복구 시 `make clean && make`로 T-80 verify부터 재개.
 
+#### 업데이트 2026-06-10 (loop 2/60) — 블로커 절반 해소
+- `riscv64-linux-gnu-gcc` 설치 확인됨. **T-80 빌드 게이트 PASS**: `make clean && make kernel/kernel` → `kernel/verifier.o`(34KB) 링크 + `kernel/kernel`(296KB) 생성, exit=0.
+- **남은 블로커**: `qemu-system-riscv64` 미설치. 이 우분투(25.x)는 riscv64 에뮬레이터가 `qemu-system-misc`가 아니라 **별도 패키지 `qemu-system-riscv`**에 있음(`apt-cache policy qemu-system-riscv` → Installed: none, Candidate: 1:10.2.1+ds-1ubuntu3). QEMU 없이는 `make regression`/`make autotest`/모든 런타임 verify(T-81+) 불가 → T-80도 regression 게이트 때문에 `[x]` 확정 보류.
+- **필요한 사람 결정(좁혀짐)**: `sudo apt-get install -y qemu-system-riscv` 1건만 추가하면 루프 정상 재개. 설치 후 `qemu-system-riscv64 --version`으로 확인.
+
 ### 5.1 보고 형식 (CLAUDE.md §10 동일)
 ```markdown
 ## T-NN: <작업명> — BLOCKED at <ISO timestamp>
