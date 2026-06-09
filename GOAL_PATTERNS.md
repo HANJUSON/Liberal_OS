@@ -103,7 +103,7 @@ Liberal_OS에 두 핵심 패턴을 **둘 다** 직접 커널 메커니즘으로 
 
 ### Phase 8 — 패턴 A: 검증+롤백 닫힌 루프
 - T-80 `[x]` verifier 골격. files: `kernel/verifier.{c,h}`, `kernel/Makefile`(또는 루트 Makefile OBJS). depends: —. verify: `make clean && make` 빌드 성공 + verifier.o 링크.
-- T-81 `[~]` `sys_verifyfix(27)` 배선 + sys_snapshot 채움. files: `kernel/syscall.{c,h}`, `kernel/sysproc.c`, `user/usys.pl`, `user/user.h`. depends: T-80. verify: `user/verifiertest.c`가 good→PASS / bad(보호 pid·범위 밖)→FAIL 단언, `make autotest`에 verifiertest 스모크 통과.
+- T-81 `[x]` `sys_verifyfix(27)` 배선 + sys_snapshot 채움. files: `kernel/syscall.{c,h}`, `kernel/sysproc.c`, `user/usys.pl`, `user/user.h`. depends: T-80. verify: `user/verifiertest.c`가 good→PASS / bad(보호 pid·범위 밖)→FAIL 단언, `make autotest`에 verifiertest 스모크 통과.
 - T-82 `[ ]` `sys_checkpoint(28)`/`sys_restore(29)` + 커널 상태 버퍼. files: `kernel/syscall.{c,h}`, `kernel/sysproc.c`, `user/usys.pl`, `user/user.h`. depends: T-81. verify: checkpoint 후 변경→restore→원복 확인(verifiertest 확장 또는 신규 단언).
 - T-83 `[ ]` evaluator/triage 재시도 루프에 verify→FAIL시 restore+retry, PASS시 checkpoint 통합. files: `user/evaluator.c`, `user/triage.c`. depends: T-82. verify: `tests/test_verifier.sh`가 "VERIFY FAIL → ROLLBACK → RETRY → ACCEPT" 시퀀스를 mock에서 재현(EVAL_RETRY 라인 검출).
 - T-84 `[ ]` 호스트 retry_context 주입(mock 포함). files: `host/proxy_daemon.py`. depends: T-83. verify: mock 재시도 트랜스크립트에 누적 위반 사유가 다음 프롬프트에 포함됨 확인.

@@ -29,6 +29,9 @@ int agentstat(void);
 int proxylock(void);
 int proxyunlock(void);
 int setprio(int);
+// Pattern A: kernel-side fix verifier (struct fix_proposal in kernel/verifier.h).
+struct fix_proposal;
+int verifyfix(struct fix_proposal*, char*, int);
 
 // ulib.c
 int stat(const char*, struct stat*);

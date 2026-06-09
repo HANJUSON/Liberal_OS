@@ -7,6 +7,7 @@
 #include "proc.h"
 #include "sleeplock.h"
 #include "vm.h"
+#include "verifier.h"
 
 // Liberal_OS T-30+: a single kernel-side sleeplock serializing
 // proxy_call sequences. With multiple agent procs sharing /console
@@ -216,4 +217,65 @@ sys_uptime(void)
   xticks = ticks;
   release(&tickslock);
   return xticks;
+}
+
+// Pattern A (T-81): resolve the proposal's target against the proc table
+// so the pure verifier never walks it. Sets target_pid (or -1) and a
+// target_protected flag when the named process is a protected one.
+static void
+fill_snapshot(struct fix_proposal *p, struct sys_snapshot *s)
+{
+  struct proc *pp;
+  int live = 0;
+
+  s->target_pid = -1;
+  s->target_protected = 0;
+  for(pp = proc; pp < &proc[NPROC]; pp++){
+    if(pp->state == UNUSED)
+      continue;
+    live++;
+    // Match the target against either the OS process name or agent role.
+    if(strncmp(pp->name, p->target, FIX_TARGET_LEN) == 0 ||
+       strncmp(pp->agent_role, p->target, FIX_TARGET_LEN) == 0){
+      s->target_pid = pp->pid;
+      if(strncmp(pp->name, "init", 16) == 0 ||
+         strncmp(pp->name, "sh", 16) == 0 ||
+         strncmp(pp->agent_role, "evaluator", 16) == 0)
+        s->target_protected = 1;
+    }
+  }
+  s->nproc = live;
+}
+
+// sys_verifyfix(struct fix_proposal *p, char *reason, int rlen)
+//   arg0: user pointer to a fix_proposal
+//   arg1: user pointer to a reason buffer (may be 0)
+//   arg2: length of that buffer
+// Returns VERIFY_OK (0) or a negative VERIFY_ERR_* code; -100 on a bad
+// argument (kept distinct from the verifier's -1..-4 codes).
+uint64
+sys_verifyfix(void)
+{
+  uint64 paddr, raddr;
+  int rlen, rc;
+  struct fix_proposal p;
+  struct sys_snapshot snap;
+  char reason[64];
+
+  argaddr(0, &paddr);
+  argaddr(1, &raddr);
+  argint(2, &rlen);
+
+  if(copyin(myproc()->pagetable, (char*)&p, paddr, sizeof(p)) < 0)
+    return -100;
+
+  fill_snapshot(&p, &snap);
+  rc = verify_fix(&p, &snap, reason, sizeof(reason));
+
+  if(raddr != 0 && rlen > 0){
+    int n = rlen < (int)sizeof(reason) ? rlen : (int)sizeof(reason);
+    if(copyout(myproc()->pagetable, raddr, reason, n) < 0)
+      return -100;
+  }
+  return (uint64)(long)rc;   // sign-extend so user int sees -1..-4
 }

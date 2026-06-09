@@ -165,6 +165,7 @@ UPROGS=\
 	$U/_evaluator\
 	$U/_triage\
 	$U/_priotest\
+	$U/_verifiertest\
 
 fs.img: mkfs/mkfs README $(UPROGS) ../samples/short.log
 	@cp ../samples/short.log _short.log

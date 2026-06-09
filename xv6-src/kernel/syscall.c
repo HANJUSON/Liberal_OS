@@ -106,6 +106,7 @@ extern uint64 sys_agentstat(void);
 extern uint64 sys_proxylock(void);
 extern uint64 sys_proxyunlock(void);
 extern uint64 sys_setprio(void);
+extern uint64 sys_verifyfix(void);
 
 // An array mapping syscall numbers from syscall.h
 // to the function that handles the system call.
@@ -136,6 +137,7 @@ static uint64 (*syscalls[])(void) = {
 [SYS_proxylock]   sys_proxylock,
 [SYS_proxyunlock] sys_proxyunlock,
 [SYS_setprio]     sys_setprio,
+[SYS_verifyfix]   sys_verifyfix,
 };
 
 void
