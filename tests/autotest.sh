@@ -55,7 +55,11 @@ pkill -f qemu-system-riscv64 >/dev/null 2>&1 || true
   # After feeding the input we send Ctrl-A X — QEMU's "-nographic" quit
   # sequence — so the run finishes as soon as smoketest is done instead
   # of idling until the timeout fires.
-  ( sleep 3; cat "$INPUT"; sleep 3; printf '\001x' ) \
+  # Smoke input, then the Pattern A/B unit programs (verifiertest exercises
+  # the kernel verifier + checkpoint/restore syscalls; cachetest exercises
+  # the response cache exact/semantic/disk paths). Both run standalone (no
+  # host proxy needed), so they fit the headless smoke gate.
+  ( sleep 3; cat "$INPUT"; printf 'verifiertest\ncachetest\n'; sleep 4; printf '\001x' ) \
     | timeout "$TIMEOUT" qemu-system-riscv64 \
         -machine virt -bios none -kernel kernel/kernel -m 128M -smp 3 -nographic \
         -global virtio-mmio.force-legacy=false \
@@ -64,12 +68,14 @@ pkill -f qemu-system-riscv64 >/dev/null 2>&1 || true
     > "$RUN_LOG" 2>&1
 ) || true   # timeout/SIGTERM from killing qemu is expected — judge by log content.
 
-if grep -q SMOKE_TEST_PASS "$RUN_LOG"; then
+if grep -q SMOKE_TEST_PASS "$RUN_LOG" \
+   && grep -q VERIFIER_TEST_PASS "$RUN_LOG" \
+   && grep -q CACHE_TEST_PASS "$RUN_LOG"; then
   echo "PASS"
   exit 0
 fi
 
-echo "FAIL: SMOKE_TEST_PASS not found in serial output"
+echo "FAIL: expected SMOKE_TEST_PASS + VERIFIER_TEST_PASS + CACHE_TEST_PASS"
 cp "$RUN_LOG" "$FAIL_LOG"
 echo "--- tail of $FAIL_LOG ---"
 tail -20 "$FAIL_LOG"
