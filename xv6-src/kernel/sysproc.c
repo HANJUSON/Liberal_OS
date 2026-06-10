@@ -26,6 +26,7 @@ struct sleeplock proxy_lock;
 struct {
   struct spinlock lock;
   int  len;              // 0 = nothing checkpointed yet
+  int  owner;            // pid that wrote the slot (per-process rollback)
   char buf[CKPT_MAX];
 } ckpt;
 
@@ -317,6 +318,7 @@ sys_checkpoint(void)
   if(len > 0)
     memmove(ckpt.buf, tmp, len);
   ckpt.len = len;
+  ckpt.owner = myproc()->pid;
   release(&ckpt.lock);
   return len;
 }
@@ -337,7 +339,9 @@ sys_restore(void)
     return -1;
 
   acquire(&ckpt.lock);
-  n = ckpt.len;
+  // Per-process rollback: only the pid that wrote the slot may restore it,
+  // so concurrent agents can't read each other's checkpoint.
+  n = (ckpt.owner == myproc()->pid) ? ckpt.len : 0;
   if(n > len)
     n = len;
   if(n > 0)

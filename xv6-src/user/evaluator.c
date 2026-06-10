@@ -11,11 +11,14 @@
 //                     per the verdict, and retry (EVAL_RETRY) — bounded to
 //                     MAX_RETRIES (T-41).
 //
-// The mock host is a pure echo, so convergence does not come from a
-// changing response; it comes from the agent amending the rejected
-// proposal in light of the verifier's reason. A flagged ("ERROR") line
-// yields an out-of-range proposal on the first attempt (rejected), which
-// the agent clamps into range on retry (accepted) — deterministically
+// Convergence is driven by the kernel VERDICT, not by a retry counter:
+// after a rejected proposal the agent restores the last accepted state and
+// calls amend_from_verdict(), which corrects the offending field according
+// to the returned VERIFY_ERR_* code (RANGE -> clamp severity, ACTION ->
+// whitelist the action, PROTECTED -> non-destructive + safe target, FIELD
+// -> fall back to baseline fields). A flagged ("ERROR") line yields an
+// out-of-range proposal on the first attempt (rejected with VERIFY_ERR_RANGE)
+// which the verdict-driven clamp makes valid on retry — deterministically
 // reproducing VERIFY FAIL -> ROLLBACK -> RETRY -> ACCEPT.
 //
 // EVAL_RETRY is still emitted on every retry so the host daemon's
@@ -62,22 +65,64 @@ strcopy(char *dst, const char *src, int max)
   dst[i] = 0;
 }
 
-// Build the candidate fix proposal for one line. A flagged response on the
-// first attempt produces an out-of-range severity — an unsafe suggestion
-// the kernel verifier rejects. On any later attempt the agent has already
-// been told why, so it clamps severity into range and resubmits.
+// A known-good baseline proposal: in-range, non-destructive, whitelisted.
+// Seeded into the checkpoint slot so the first rollback restores real state.
 static void
-build_proposal(struct fix_proposal *p, const char *resp, int attempt)
+build_default_proposal(struct fix_proposal *p)
+{
+  memset(p, 0, sizeof(*p));
+  strcopy(p->role, "fixsuggest", FIX_ROLE_LEN);
+  strcopy(p->target, "parser", FIX_TARGET_LEN);
+  p->action = FIX_ACTION_REPORT;                  // safest whitelisted action
+  p->severity = 0;
+  p->retry_hint = 0;
+}
+
+// Build the INITIAL candidate fix proposal for one line. A flagged ("ERROR")
+// upstream response yields an aggressive, out-of-range severity guess — an
+// unsafe suggestion the kernel verifier is expected to reject. The
+// *correction* is not made here; it is driven by the verdict (see
+// amend_from_verdict), so this stays a pure function of the response.
+static void
+build_proposal(struct fix_proposal *p, const char *resp)
 {
   memset(p, 0, sizeof(*p));
   strcopy(p->role, "fixsuggest", FIX_ROLE_LEN);   // proposing agent
   strcopy(p->target, "parser", FIX_TARGET_LEN);   // non-protected target
   p->action = FIX_ACTION_REQUEUE;                 // whitelisted action
-  p->retry_hint = attempt;
-  if (quality_bad(resp) && attempt == 0)
-    p->severity = 9;        // out of [0,3] -> VERIFY_ERR_RANGE on attempt 0
-  else
-    p->severity = 2;        // corrected/valid on retry (or clean line)
+  p->retry_hint = 0;
+  p->severity = quality_bad(resp) ? 9 : 2;        // 9 is out of [0,3]
+}
+
+// Correct a rejected proposal according to the kernel's verdict code,
+// starting from the last accepted state `base` for any field the verdict
+// does not pin. This is the closed loop: the fix the agent resubmits is a
+// causal function of *why* the kernel rejected it, not of the attempt count.
+static void
+amend_from_verdict(struct fix_proposal *p, const struct fix_proposal *base,
+                   int rc)
+{
+  switch (rc) {
+  case VERIFY_ERR_RANGE:                           // numeric field out of range
+    if (p->severity < FIX_SEVERITY_MIN) p->severity = FIX_SEVERITY_MIN;
+    if (p->severity > FIX_SEVERITY_MAX) p->severity = FIX_SEVERITY_MAX;
+    if (p->retry_hint < 0) p->retry_hint = 0;
+    break;
+  case VERIFY_ERR_ACTION:                          // action not whitelisted
+    p->action = FIX_ACTION_REQUEUE;
+    break;
+  case VERIFY_ERR_PROTECTED:                       // destructive vs protected
+    p->action = FIX_ACTION_REPORT;                 // de-escalate to safe action
+    strcopy(p->target, base->target, FIX_TARGET_LEN);
+    break;
+  case VERIFY_ERR_FIELD:                           // missing / oversized field
+    strcopy(p->role, base->role, FIX_ROLE_LEN);
+    strcopy(p->target, base->target, FIX_TARGET_LEN);
+    break;
+  default:                                         // unknown -> revert to base
+    *p = *base;
+    break;
+  }
 }
 
 int
@@ -87,13 +132,14 @@ main(void)
   char resp[256];
   char last_resp[256];
   char reason[64];
-  struct fix_proposal prop;
+  struct fix_proposal prop, base;
 
   setrole("evaluator");
 
-  // Seed the checkpoint slot with a baseline so the first rollback after a
-  // rejected proposal has a prior accepted state to restore to.
-  checkpoint("BASELINE", 9);
+  // Seed the checkpoint slot with a valid, known-good baseline so the first
+  // rollback restores real (in-range, whitelisted) state to amend from.
+  build_default_proposal(&base);
+  checkpoint(&base, sizeof(base));
 
   while (proxy_readline(0, line, sizeof(line)) > 0) {
     int ok = 0;
@@ -103,18 +149,23 @@ main(void)
       if (proxy_call("evaluator", line, resp, sizeof(resp)) < 0) goto done;
       strcopy(last_resp, resp, sizeof(last_resp));
 
-      build_proposal(&prop, resp, attempts);
-      if (verifyfix(&prop, reason, sizeof(reason)) == VERIFY_OK) {
+      if (attempts == 0)
+        build_proposal(&prop, resp);     // initial candidate (may be unsafe)
+      // on a retry, prop already carries the verdict-driven correction below
+
+      int rc = verifyfix(&prop, reason, sizeof(reason));
+      if (rc == VERIFY_OK) {
         checkpoint(&prop, sizeof(prop));   // commit the accepted state
         emit(1, "EVAL_ACCEPT ", line);
         ok = 1;
         break;
       }
       // Rejected by the kernel: report why, roll back to the last accepted
-      // state, and retry with a corrected proposal.
+      // state, and amend the proposal per the verdict code (not the counter).
       emit(1, "EVAL_VERIFY_FAIL ", reason);
-      restore(&prop, sizeof(prop));
+      restore(&base, sizeof(base));        // last accepted state (now consumed)
       emit(1, "EVAL_ROLLBACK ", line);
+      amend_from_verdict(&prop, &base, rc);
       emit(1, "EVAL_RETRY ", line);
     }
     if (ok)
