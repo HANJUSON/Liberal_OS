@@ -858,19 +858,42 @@ python3 -m venv .venv
 . .venv/bin/activate
 pip install -r host/requirements.txt
 
-# 4. mock-mode automated gates
-make regression          # ~12s — boot + smoke + shell + proxy hello
-bash tests/e2e_mock.sh   # ~1s  — five-agent triage end-to-end
+# 4. mock-mode automated gates (no network, deterministic)
+make regression          # 6-stage gate: boot+smoke (incl. verifiertest &
+                         #   cachetest) · xv6 shell · proxy hello(mock) ·
+                         #   test_verifier.sh (Pattern A) · test_cache.sh
+                         #   (Pattern B) · capture_patterns.py (2-pattern evidence)
+python3 host/proxy_daemon.py --mode mock --triage short.log   # five-agent e2e
 BENCH_N=5 bash bench/run_all.sh   # produces out/REPORT.md
 
-# 5. live mode (requires Upstage API key in .env)
+# Pattern A/B can also be exercised individually:
+bash tests/test_verifier.sh                 # VERIFY FAIL→ROLLBACK→RETRY→ACCEPT
+bash tests/test_cache.sh                     # cache hit skips PROXY_REQ
+python3 bench/capture_patterns.py            # -> docs/patterns_demo.txt
+# (test_verifier.sh / test_cache.sh / capture_patterns.py each regenerate
+#  fs.img first so /cache.bin starts empty — otherwise a warm cache would
+#  short-circuit every PROXY_REQ and flake the role-coverage check.)
+
+# 5. run modes & topology (the --mode / topology matrix)
+python3 host/proxy_daemon.py --mode mock     --triage short.log   # echo, cost 0
+python3 host/proxy_daemon.py --mode replay   --triage short.log   # cached, instant
+python3 host/proxy_daemon.py --mode live     --triage short.log --timeout 240
+python3 host/proxy_daemon.py --triage-sequential short.log --mode live --timeout 240
+#   parallel (default): fork+pipe stages concurrent, serialised by proxylock.
+#   sequential: shell ';'-chained stages, zero lock contention (speedup baseline).
+
+# 6. live mode (requires Upstage API key in .env)
 cp .env.example .env  # paste UPSTAGE_API_KEY from the instructor
-MODE=live python3 host/hello_upstage.py            # single-call smoke
-# 25-call pipeline (sequential topology + extended timeout):
+MODE=live python3 host/hello_upstage.py            # single-call smoke (~1s)
 python3 host/proxy_daemon.py --triage-sequential short.log \\
-        --mode live --timeout 240 2> out/live-trace.log
-# After the first live run, replay is instant:
-python3 host/proxy_daemon.py --mode replay --triage short.log
+        --mode live --timeout 240 2> out/live-trace.log   # 25-call pipeline
+#   - 25 calls × 0.3–1.5s ≈ 15–40s wall-clock; the default --timeout 20 is too
+#     small — use --timeout 180+.
+#   - live replies are sanitised with " ".join(raw.split()) in live_handler so a
+#     stray \n/\t cannot break PROXY_RES line framing (the system prompt also
+#     forces single-line replies).
+#   - cache at .cache/llm/<sha256>.json; after one live run, --mode replay
+#     reproduces it in 1–2 s.
 
 # 6. interactive demo
 cd xv6-src && make qemu
