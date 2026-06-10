@@ -37,7 +37,11 @@ from proxy_daemon import (                   # noqa: E402
     mock_handler, PROXY_REQ_TAG, PROXY_RES_TAG,
 )
 
-OUT = ROOT / "docs" / "patterns_demo.txt"
+# Default writes the committed evidence file; a gate can redirect to a
+# scratch path (PATTERNS_DEMO_OUT) to verify live reproduction without
+# dirtying the tracked artifact.
+OUT = pathlib.Path(os.environ.get("PATTERNS_DEMO_OUT",
+                                  str(ROOT / "docs" / "patterns_demo.txt")))
 
 
 def regen_fsimg() -> None:

@@ -28,7 +28,10 @@ mkdir -p "$OUT_DIR"
 pkill -f qemu-system-riscv64 >/dev/null 2>&1 || true
 
 # Fresh filesystem image => empty /cache.bin => deterministic cache state.
-( cd "$ROOT/xv6-src" && rm -f fs.img && make fs.img ) >/dev/null 2>&1
+if ! ( cd "$ROOT/xv6-src" && rm -f fs.img && make fs.img ) >/dev/null 2>&1; then
+  echo "FAIL: could not regenerate fs.img (a stale warm cache would flake this gate)"
+  exit 1
+fi
 
 cd "$ROOT"
 python3 host/proxy_daemon.py --mode mock --triage short.log > "$JSON" 2>/dev/null

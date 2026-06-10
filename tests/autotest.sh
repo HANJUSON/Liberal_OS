@@ -47,6 +47,14 @@ pkill -f qemu-system-riscv64 >/dev/null 2>&1 || true
   exit 1
 }
 
+# Fresh fs.img so /cache.bin starts empty: cachetest's disk-overlay
+# assertions must not be satisfied by records left from a prior boot
+# (incremental make does not rebuild fs.img when sources are unchanged).
+if ! ( cd "$XV6_DIR" && rm -f fs.img && make fs.img ) >/dev/null 2>&1; then
+  echo "FAIL: could not regenerate fs.img" | tee "$FAIL_LOG"
+  exit 1
+fi
+
 # Drive xv6 through serial. The leading sleep gives the kernel time to
 # reach the shell prompt; the trailing sleep keeps stdin open long enough
 # for smoketest output to flush before the timeout closes the pipe.

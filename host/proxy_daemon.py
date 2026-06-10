@@ -282,13 +282,19 @@ def _drive_triage(ch: Xv6Channel, mode: str, input_file: str,
                 if len(parts) != 4:
                     continue
                 _, req_id, role, prompt = parts
-                # Pattern A retry-context injection: the accumulated kernel
-                # violation reasons augment the *prompt* the evaluator's model
-                # is asked to fix (the model's input), and the augmented prompt
-                # is recorded in the transcript as evidence. The reply returned
-                # is the model's answer to that prompt — under the mock echo
-                # handler we echo the model's view (the original line) rather
-                # than feeding the retry-context text back as the "response".
+                # Pattern A retry-context: accumulated kernel verifier violation
+                # reasons are recorded (injected_prompts) as evidence of the
+                # feedback the evaluator's retry *would* carry. It is NOT fed to
+                # the handler today, by design — two coupled reasons make that a
+                # guest-side change, not a host one-liner (tracked in STATUS.md):
+                #   1. retry_context accumulates across all input lines, so the
+                #      augmented string can exceed the guest's line buffer and
+                #      desync the PROXY_RES framing (observed: pipeline hangs).
+                #   2. with Pattern B's kernel cache on, a same-(role,prompt)
+                #      retry is served from the guest cache and emits no
+                #      PROXY_REQ, so the host cannot inject on the retry anyway.
+                # The real fix: the evaluator (guest) embeds the reason in its
+                # next prompt (changing the cache key) and bounds it per line.
                 eff_prompt = prompt
                 if role == "evaluator" and retry_context:
                     eff_prompt = f"{prompt} |retry_context: {'; '.join(retry_context)}"
