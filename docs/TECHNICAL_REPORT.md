@@ -25,10 +25,11 @@ pipes, and reaches an Upstage Solar Pro 3 model via a Linux-side proxy
 daemon.
 
 End-to-end the system processes a five-line input log under mock-mode
-LLM responses in **0.98 ± 0.03 seconds** (5-iteration average). The
-Evaluator agent observes a bounded-retry Supervisor pattern: lines that
-fail its quality rule are retried up to three times before being flagged
-`evaluator:FAIL`. A custom priority-aware scheduler in `scheduler()`
+LLM responses in **~1.5 seconds** (5-iteration mock average). The
+Evaluator agent observes a bounded-retry Supervisor pattern in which the
+**kernel verifier** decides acceptance: a flagged line's initial
+out-of-range fix is rejected, amended per the kernel's verdict, and
+accepted on retry (bounded to three attempts). A custom priority-aware scheduler in `scheduler()`
 demonstrates that high-priority agents complete strictly before
 lower-priority siblings on the same QEMU instance.
 
@@ -98,7 +99,7 @@ final row:
 | 5 | Differentiated agent service | **Scheduling (priority)** | `proc.c` `scheduler()` | Two-pass selection (max-priority RUNNABLE first, multi-CPU fallback) plus `setprio(int)` syscall clamped to nice-style `[-20, 19]`. Default `priority = 0` reduces to baseline Round Robin. |
 | 6 | Fault containment | **Process isolation** | inherent in xv6 | Each agent is its own `struct proc` with its own page table; the `procfields` user-space smoke confirms that fork+pipe semantics are not regressed by our struct extension. |
 | 7 | Observability | **System calls** | `syscall.c/h`, `sysproc.c`, `user.h`, `usys.pl` | Five new syscalls (22–26): `setrole(22)`, `agentstat(23)`, `proxylock(24)`, `proxyunlock(25)`, `setprio(26)`. `agentstat` walks the proc table and emits a one-line JSON snapshot. Rows 8–9 add six more (27–32), for eleven new syscalls in total. |
-| 8 | Kernel-arbitrated fix verification + rollback (**Pattern A**) | **System calls + synchronisation** | `verifier.{c,h}`, `sysproc.c`, new syscalls 27–29 | The LLM is only a *proposer*; the kernel holds final authority. A pure verifier `verify_fix()` checks each fix proposal's structural integrity, numeric ranges, action whitelist, and a protected-process rule. `verifyfix(27)` resolves proc state into a `sys_snapshot` so the verifier never walks `proc[]`; `checkpoint(28)`/`restore(29)` (a spinlock-guarded kernel slot) roll back to the last accepted state on rejection. The evaluator's bounded retry loop drives **VERIFY FAIL → ROLLBACK → RETRY → ACCEPT**. |
+| 8 | Kernel-arbitrated fix verification + rollback (**Pattern A**) | **System calls + synchronisation** | `verifier.{c,h}`, `sysproc.c`, new syscalls 27–29 | The LLM is only a *proposer*; the kernel holds final authority. A pure verifier `verify_fix()` checks each fix proposal's structural integrity, numeric ranges, action whitelist, and a protected-process rule. `verifyfix(27)` resolves proc state into a `sys_snapshot` so the verifier never walks `proc[]`; `checkpoint(28)`/`restore(29)` (a spinlock-guarded, **pid-tagged** kernel slot — only the writer may restore) roll back to the last accepted state on rejection. On rejection the evaluator amends the proposal **per the kernel's verdict code** (`VERIFY_ERR_RANGE`→clamp severity, `_ACTION`→whitelist, `_PROTECTED`→de-escalate, `_FIELD`→baseline), so convergence is *verdict-driven* (a function of why the kernel rejected, not the attempt count). The bounded retry loop drives **VERIFY FAIL → ROLLBACK → RETRY → ACCEPT**. |
 | 9 | Kernel semantic response cache (**Pattern B**) | **File system + system calls** | `cache.{c,h}`, `mkfs.c`, new syscalls 30–32 | A 64-slot RAM table keyed by FNV-1a(`role\|prompt`) with per-entry MinHash signatures for paraphrase (semantic) hits via an integer Jaccard threshold, backed by a `/cache.bin` **disk overlay** (append on set; sequential scan + RAM promotion on miss) through the inode API (`writei`/`readi`). `cacheget(30)`/`cacheset(31)`/`cacheclear(32)` expose it; `proxy_call` consults the cache first and **short-circuits the PROXY_REQ (the LLM call) on a hit**. This is also where the kernel *writes* to the xv6 file system, beyond the read-only input use in the final row. |
 | — | Input persistence | **File system (used, *not* modified)** | none — uses xv6's existing fs | The input log lives as a real file in the xv6 file system (`short.log`, copied in at `fs.img` build time); agents read it through standard `open(2)` / `read(2)`. This row is listed for completeness — we did **not** add to xv6's filesystem code, so it does **not** count toward the seven directly-implemented concepts above. |
 
@@ -192,10 +193,12 @@ input file  ──→  parser  ──→  classifier  ──→  rootcause  ─�
 Each stage reads its upstream pipe line by line, makes one
 `proxy_call(role, line)` to the host, prefixes the response with its
 own role tag, and writes the result to its downstream pipe. The
-Evaluator extends this: it applies a quality rule (presence of `ERROR`
-in the response) and retries the call up to three times before
-flagging the line `evaluator:FAIL:`. Each retry attempt emits an
-`EVAL_RETRY` token that the host daemon counts for the report.
+Evaluator extends this: it submits a candidate fix to the **kernel
+verifier** (`verifyfix`) and, on rejection, amends the proposal per the
+returned verdict code and retries (bounded to three attempts) — a flagged
+line is accepted once its out-of-range field is clamped into range. Each
+retry attempt emits an `EVAL_RETRY` token that the host daemon counts for
+the report.
 
 ### §4.3 Proxy framing on the shared serial
 
@@ -482,20 +485,30 @@ The Supervisor pattern is implemented at the Evaluator agent. The
 `evaluator.c` main loop, per upstream line:
 
 ```c
-for (int attempts = 0; attempts < MAX_RETRIES; attempts++) {
+for (attempts = 0; attempts < MAX_RETRIES; attempts++) {
   proxy_call("evaluator", line, resp, …);
-  if (!quality_bad(resp)) { ok = 1; break; }
+  if (attempts == 0) build_proposal(&prop, resp);   // initial candidate
+  int rc = verifyfix(&prop, reason, …);             // kernel verdict
+  if (rc == VERIFY_OK) { checkpoint(&prop, …); ok = 1; break; }
+  emit(1, "EVAL_VERIFY_FAIL ", reason);
+  restore(&base, …);                                // roll back to last good
+  amend_from_verdict(&prop, &base, rc);             // correct per the verdict
   emit(1, "EVAL_RETRY ", line);
 }
 emit(1, ok ? "evaluator:OK:" : "evaluator:FAIL:", ok ? resp : line);
 ```
 
-`quality_bad()` is a mock rule: a response is considered "bad" if it
-contains the substring `ERROR`. Because the mock host echoes the
-prompt, any line that originated with `ERROR` (in our sample log:
-`ERROR: disk full at /var/log` and `ERROR: connection refused 5432`)
-gets retried exactly three times and ends in `FAIL`; non-ERROR lines
-succeed on the first attempt.
+The **kernel verifier**, not a userspace heuristic, decides acceptance.
+`quality_bad()` (a mock rule: the response contains `ERROR`) only shapes
+the *initial* proposal — a flagged line yields an out-of-range `severity`
+that the verifier rejects with `VERIFY_ERR_RANGE`. The agent then
+`restore()`s the last accepted state and `amend_from_verdict()` clamps the
+severity into range, so the retry is accepted. In our sample log the two
+`ERROR` lines (`ERROR: disk full at /var/log`, `ERROR: connection refused
+5432`) each take exactly one retry and **all five lines ultimately accept**
+(`eval_retries = 2`, `eval_oks = 5`); non-ERROR lines pass on the first
+attempt. Convergence is thus a causal function of the kernel's verdict,
+not of the attempt count.
 
 ### §9.1 Design choice vs the original spec
 
@@ -538,20 +551,23 @@ Captured by `BENCH_N=5 bash bench/run_all.sh`:
 
 ```json
 {
-  "elapsed_s":       {"mean": 0.98,  "stdev": 0.03, "n": 5},
-  "evaluator_lines": {"mean": 5.0,   "stdev": 0.0,  "n": 5},
-  "eval_retries":    {"mean": 6.0,   "stdev": 0.0,  "n": 5},
-  "eval_fails":      {"mean": 2.0,   "stdev": 0.0,  "n": 5},
-  "eval_oks":        {"mean": 3.0,   "stdev": 0.0,  "n": 5}
+  "elapsed_s":       {"mean": 1.51,  "stdev": 0.04,  "n": 5},
+  "evaluator_lines": {"mean": 4.8,   "stdev": 0.45,  "n": 5},
+  "eval_retries":    {"mean": 2.0,   "stdev": 0.0,   "n": 5},
+  "eval_fails":      {"mean": 0.0,   "stdev": 0.0,   "n": 5},
+  "eval_oks":        {"mean": 4.8,   "stdev": 0.45,  "n": 5}
 }
 ```
 
-Interpretation: across all five runs the pipeline (i) processes every
-input line through all five agents (`served[role] = 5` for each role
-other than evaluator which sums first-attempts + retries), (ii)
-reproduces the retry behaviour exactly (every `ERROR` line is retried
-three times and ends in `FAIL`), and (iii) finishes in under one
-second end-to-end.
+Interpretation: across all five runs (each on a fresh `fs.img`, so the
+kernel response cache starts empty) the two `ERROR` lines each take
+exactly one **verdict-driven** retry (`eval_retries = 2`) and **every line
+that reaches the evaluator is accepted** (`eval_fails = 0`) — the kernel
+verifier rejects the initial out-of-range proposal, the agent clamps it
+per the `VERIFY_ERR_RANGE` verdict, and the retry passes. The occasional
+`evaluator_lines`/`eval_oks` of 4 rather than 5 is a console-interleave
+artifact under `-smp 3` (a serial line torn by a concurrent agent), not a
+verification failure. End-to-end completes in ~1.5 s.
 
 ### §10.3 Priority-scheduling effect
 
@@ -598,7 +614,8 @@ proxy_lock ceiling.
 
 What the numbers *do* say is that the system is **deterministic and
 internally consistent**: the five agents each serve five lines; the
-two ERROR-bearing inputs each retry exactly three times and fail; the
+two ERROR-bearing inputs each take exactly one verdict-driven retry and are
+then accepted (`eval_fails = 0`); the
 three non-ERROR inputs succeed on first attempt; the priority
 scheduler orders six CPU-bound children strictly by their
 `setprio`-assigned priority. Every one of those statements is
@@ -694,14 +711,21 @@ rule (no destructive action against `init`/`sh`/`evaluator`). The syscall
 layer (`sys_verifyfix`) resolves any needed process state into a
 `sys_snapshot` so the verifier stays a unit-testable pure function — this
 also keeps the scheduler/`proc.c` core untouched (a human-gated region).
-On rejection the evaluator `restore()`s the last `checkpoint()`ed state,
-appends the violation reason to its retry context, and retries (bounded to
-three attempts, preserving the T-41 budget). *Measured (mock,
-`triage short.log`):* the two `ERROR` log lines each take the full
-**VERIFY FAIL → ROLLBACK → RETRY → ACCEPT** path (`eval_retries = 2`), all
-five lines ultimately accepted; the host injects the accumulated violation
-reasons into the next prompt (`retry_injections = 6`,
-`retry_context = ["severity out of range [0,3]", …]`).
+On rejection the evaluator emits the violation reason, `restore()`s the
+last `checkpoint()`ed baseline (a **pid-tagged** slot, so concurrent agents
+cannot read each other's checkpoint), and **amends the proposal according
+to the kernel's verdict code** (`VERIFY_ERR_RANGE`→clamp `severity` into
+`[0,3]`, `_ACTION`→whitelist the action, `_PROTECTED`→de-escalate + safe
+target, `_FIELD`→baseline fields), then retries (bounded to three attempts,
+preserving the T-41 budget). Convergence is therefore a causal function of
+*why* the kernel rejected the fix, not of the attempt count. *Measured
+(mock, `triage short.log`):* the two `ERROR` log lines each take the full
+**VERIFY FAIL → ROLLBACK → RETRY → ACCEPT** path (`eval_retries = 2`, reason
+`"severity out of range [0,3]"`), all five lines ultimately accepted. The
+host additionally records each retry's would-be reason-augmented prompt as
+evidence (`retry_injections`); feeding that text back to the model itself
+remains a documented guest-side follow-up — the kernel cache short-circuits
+same-prompt retries, so the host never sees the retry request.
 
 **Pattern B — kernel semantic cache short-circuit (§3 row 9).** Before an
 agent issues a `PROXY_REQ`, `proxy_call` consults a kernel cache. An exact

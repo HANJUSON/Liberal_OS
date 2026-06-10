@@ -99,7 +99,7 @@
 - T-81 `[x]` `sys_verifyfix(27)` 배선 + `sys_snapshot` 채움 (proc 테이블은 sysproc.c에서 읽어 verifier로 전달, scheduler 미수정). `user/verifiertest.c` 5단언 PASS. 커밋 `cfb681e`.
 - T-82 `[x]` `checkpoint(28)`/`restore(29)` + 스핀락 보호 커널 슬롯(proxyinit 초기화 → main.c 미수정). 왕복 단언 PASS. 커밋 `cc659ec`.
 - T-83 `[x]` evaluator에 verify→FAIL시 restore+retry, PASS시 checkpoint 통합. `tests/test_verifier.sh`로 VERIFY FAIL→ROLLBACK→RETRY→ACCEPT 재현(eval_retries=2). 커밋 `dbde9a3`.
-- T-84 `[x]` 호스트 retry_context 주입 — `EVAL_VERIFY_FAIL` 사유 누적해 다음 evaluator 프롬프트에 주입·기록(retry_injections=6). 커밋 `fb30f6b`.
+- T-84 `[x]` 호스트 retry_context — `EVAL_VERIFY_FAIL` 사유를 누적·기록(`retry_injections`, **증거용**). 모델 입력 재주입은 guest-side 후속(§5): 커널 캐시가 동일 프롬프트 retry를 단락하고 누적 문자열이 프레임을 깰 수 있어 미배선. 수렴 자체는 Option B로 **커널 평결 구동**(evaluator가 `VERIFY_ERR_*` 코드로 제안 교정, 커밋 `9866d49`). 커밋 `fb30f6b`.
 
 ### Phase 9 — 패턴 B: 커널 시맨틱 캐시 단락 (GOAL_PATTERNS T-85~88)
 - T-85 `[x]` FNV-1a exact RAM 캐시 + `cacheget(30)/cacheset(31)` 시스콜(T-88 배선 선반영). `user/cachetest.c` exact hit/miss PASS. 커밋 `0de6265`.

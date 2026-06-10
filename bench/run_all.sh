@@ -65,6 +65,10 @@ run_one() {
 
 echo "[bench 1/3] e2e mock parallel — $N iterations, ${TIMEOUT}s each"
 for i in $(seq 1 "$N"); do
+  # Fresh fs.img per iteration => empty /cache.bin, so each run is an
+  # independent measurement; a warm cache from a prior iteration would
+  # short-circuit roles and skew the served counts (-> ok=false).
+  ( cd "$ROOT/xv6-src" && rm -f fs.img && make fs.img ) >/dev/null 2>&1
   out_file="$E2E_DIR/e2e_$i.json"
   run_one "parallel" "$out_file" --mode mock --triage short.log --timeout "$TIMEOUT" || true
   ok=$(python3 -c "import json; d=json.load(open('$out_file')); print(d.get('ok'))")
@@ -74,6 +78,7 @@ done
 
 echo "[bench 2/3] e2e mock sequential — $N iterations, ${TIMEOUT}s each"
 for i in $(seq 1 "$N"); do
+  ( cd "$ROOT/xv6-src" && rm -f fs.img && make fs.img ) >/dev/null 2>&1
   out_file="$SEQ_DIR/seq_$i.json"
   run_one "sequential" "$out_file" --mode mock --triage-sequential short.log --timeout "$TIMEOUT" || true
   ok=$(python3 -c "import json; d=json.load(open('$out_file')); print(d.get('ok'))")

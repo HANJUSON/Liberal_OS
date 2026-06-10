@@ -107,7 +107,7 @@ Worker agent                          Evaluator agent
 
 **Two kernel-level patterns that set this work apart:**
 
-- **Pattern A — in-kernel verifier (`kernel/verifier.c`, syscalls 27–29):** every LLM-proposed fix is guarded by field / range / whitelist / protected-process checks before it can take effect. **FAIL → checkpoint/restore rollback + retry; PASS → accept.** The kernel, not userspace, owns the safety contract.
+- **Pattern A — in-kernel verifier (`kernel/verifier.c`, syscalls 27–29):** every LLM-proposed fix is guarded by field / range / whitelist / protected-process checks before it can take effect. **FAIL → restore (pid-tagged checkpoint) + amend the fix per the kernel's verdict code → retry; PASS → accept.** Convergence is *verdict-driven*: the correction is a causal function of *why* the kernel rejected the fix (`VERIFY_ERR_RANGE` → clamp severity, etc.), not a retry counter. The kernel, not userspace, owns the safety contract.
 - **Pattern B — in-kernel response cache (`kernel/cache.c`, syscalls 30–32):** short-circuits the LLM call *before* a `PROXY_REQ` is even emitted — **FNV-1a** exact match + **MinHash/Jaccard** semantic (paraphrase) match, backed by a `/cache.bin` disk overlay. Caching becomes an OS service, not a per-script dict.
 
 ---
