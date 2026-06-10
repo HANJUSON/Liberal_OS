@@ -102,13 +102,14 @@ Worker agent                          Evaluator agent
 | – | Agent context persistence| File system (reused)    | xv6 fs (no kernel mod yet — F-01) |
 
 - Rule of thumb: if it could have been `multiprocessing` or `cgroups`, we did **not** use it.
-- **11 new syscalls shipped (nos. 22–32)** — from `setrole(2)` / `agentstat(2)` introspection
+- **12 new syscalls shipped (nos. 22–33)** — from `setrole(2)` / `agentstat(2)` introspection
   through the **verify+rollback** (27–29) and **semantic-cache** (30–32) families — plus a userspace `priotest`.
 
 **Two kernel-level patterns that set this work apart:**
 
 - **Pattern A — in-kernel verifier (`kernel/verifier.c`, syscalls 27–29):** every LLM-proposed fix is guarded by field / range / whitelist / protected-process checks before it can take effect. **FAIL → restore (pid-tagged checkpoint) + amend the fix per the kernel's verdict code → retry; PASS → accept.** Convergence is *verdict-driven*: the correction is a causal function of *why* the kernel rejected the fix (`VERIFY_ERR_RANGE` → clamp severity, etc.), not a retry counter. The kernel, not userspace, owns the safety contract.
 - **Pattern B — in-kernel response cache (`kernel/cache.c`, syscalls 30–32):** short-circuits the LLM call *before* a `PROXY_REQ` is even emitted — **FNV-1a** exact match + **MinHash/Jaccard** semantic (paraphrase) match, backed by a `/cache.bin` disk overlay. Caching becomes an OS service, not a per-script dict.
+- **Per-process memory quota (`growproc` enforcement + `setquota(33)`):** the kernel caps each agent's resident memory — `sbrk` past the cap is denied (`AGENT_LOG`'d), forks inherit the cap. Per-process resource control, owned by the OS.
 
 ---
 
@@ -199,7 +200,7 @@ Worker agent                          Evaluator agent
 
 **Talking-point summary**
 - Five LLM agents, each a real xv6 process.
-- One evaluator, one priority scheduler, eleven new syscalls (nos. 22–32) — including kernel verify+rollback and a semantic response cache.
+- One evaluator, one priority scheduler, twelve new syscalls (nos. 22–33) — including kernel verify+rollback, a semantic response cache, and a per-process memory quota.
 - Reproducible, measurable, and isolated — at the OS level, by construction.
 
 ---

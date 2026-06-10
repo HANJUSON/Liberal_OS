@@ -118,6 +118,9 @@
 
 **신규 시스콜 누적**: `verifyfix(27)`, `checkpoint(28)`, `restore(29)`, `cacheget(30)`, `cacheset(31)`, `cacheclear(32)` — 기존 26 → 32. 신규 커널 파일: `verifier.{c,h}`, `cache.{c,h}`.
 
+### Phase 11 — 메모리 관리 (2026-06-10)
+- T-A1 `[x]` 프로세스별 메모리 쿼터 — `proc.h` `mem_quota`/`quota_denied`, `growproc` 거부+`AGENT_LOG`, `setquota(33)` 시스콜, `agentstat` 노출(rss_kb/quota_pg/qdenied), `quotatest`(QUOTA_TEST_PASS) autotest 스모크 게이트 편입. `scheduler()`/`sched.c` 무변경. `feat/mem` 브랜치, regression 6/6 PASS. **신규 시스콜 `setquota(33)` — 누적 32 → 33.**
+
 ---
 
 ## 4. 남은 사람 작업 (자율 처리 불가)

@@ -83,10 +83,12 @@ The course guideline §2 demands that at least one — preferably more —
 of *processes, threads, synchronisation, scheduling, virtual memory,
 file systems, IPC, system calls* be **directly designed and
 implemented**. Liberal_OS **directly implements seven core mechanisms
-plus two Phase 8/9 subsystems (nine in total)**
-in modified xv6 source (rows 1–7), **the two Phase 8/9
-kernel subsystems being** — a fix verifier and a semantic response cache
-(rows 8–9, the *verify+rollback* and *semantic-cache* patterns) — and
+plus three added subsystems (verify+rollback, semantic cache,
+memory quota) — ten in total**
+in modified xv6 source (rows 1–7), **the three added
+kernel subsystems being** — a fix verifier, a semantic response cache,
+and a per-process memory quota (rows 8–10, the *verify+rollback*,
+*semantic-cache*, and *memory-quota* patterns) — and
 **uses one more** concept (the file system, read-only for input) as the
 final row:
 
@@ -98,13 +100,14 @@ final row:
 | 4 | Mutual exclusion on shared resource | **Synchronisation (sleeplocks)** | `console.c`, `sysproc.c`, new syscalls 24 & 25 | A kernel sleeplock (`cons_write_lock`) wraps `consolewrite` so per-write atomicity holds against sibling user writes; a second sleeplock (`proxy_lock`) plus syscalls `proxylock(2)` / `proxyunlock(2)` serialise the *send + recv* of one `proxy_call` against any other agent's. |
 | 5 | Differentiated agent service | **Scheduling (priority)** | `proc.c` `scheduler()` | Two-pass selection (max-priority RUNNABLE first, multi-CPU fallback) plus `setprio(int)` syscall clamped to nice-style `[-20, 19]`. Default `priority = 0` reduces to baseline Round Robin. |
 | 6 | Fault containment | **Process isolation** | inherent in xv6 | Each agent is its own `struct proc` with its own page table; the `procfields` user-space smoke confirms that fork+pipe semantics are not regressed by our struct extension. |
-| 7 | Observability | **System calls** | `syscall.c/h`, `sysproc.c`, `user.h`, `usys.pl` | Five new syscalls (22–26): `setrole(22)`, `agentstat(23)`, `proxylock(24)`, `proxyunlock(25)`, `setprio(26)`. `agentstat` walks the proc table and emits a one-line JSON snapshot. Rows 8–9 add six more (27–32), for eleven new syscalls in total. |
+| 7 | Observability | **System calls** | `syscall.c/h`, `sysproc.c`, `user.h`, `usys.pl` | Five new syscalls (22–26): `setrole(22)`, `agentstat(23)`, `proxylock(24)`, `proxyunlock(25)`, `setprio(26)`. `agentstat` walks the proc table and emits a one-line JSON snapshot. Rows 8–10 add seven more (27–33), for twelve new syscalls in total. |
 | 8 | Kernel-arbitrated fix verification + rollback (**Pattern A**) | **System calls + synchronisation** | `verifier.{c,h}`, `sysproc.c`, new syscalls 27–29 | The LLM is only a *proposer*; the kernel holds final authority. A pure verifier `verify_fix()` checks each fix proposal's structural integrity, numeric ranges, action whitelist, and a protected-process rule. `verifyfix(27)` resolves proc state into a `sys_snapshot` so the verifier never walks `proc[]`; `checkpoint(28)`/`restore(29)` (a spinlock-guarded, **pid-tagged** kernel slot — only the writer may restore) roll back to the last accepted state on rejection. On rejection the evaluator amends the proposal **per the kernel's verdict code** (`VERIFY_ERR_RANGE`→clamp severity, `_ACTION`→whitelist, `_PROTECTED`→de-escalate, `_FIELD`→baseline), so convergence is *verdict-driven* (a function of why the kernel rejected, not the attempt count). The bounded retry loop drives **VERIFY FAIL → ROLLBACK → RETRY → ACCEPT**. |
 | 9 | Kernel semantic response cache (**Pattern B**) | **File system + system calls** | `cache.{c,h}`, `mkfs.c`, new syscalls 30–32 | A 64-slot RAM table keyed by FNV-1a(`role\|prompt`) with per-entry MinHash signatures for paraphrase (semantic) hits via an integer Jaccard threshold, backed by a `/cache.bin` **disk overlay** (append on set; sequential scan + RAM promotion on miss) through the inode API (`writei`/`readi`). `cacheget(30)`/`cacheset(31)`/`cacheclear(32)` expose it; `proxy_call` consults the cache first and **short-circuits the PROXY_REQ (the LLM call) on a hit**. This is also where the kernel *writes* to the xv6 file system, beyond the read-only input use in the final row. |
+| 10 | Per-process memory quota (resource control) | **Memory management / system calls** | `proc.{h,c}`, `sysproc.c` | The kernel caps each agent process's resident heap. `growproc()` denies any `sbrk` growth past the cap (returns -1, logged via `AGENT_LOG`), so an agent cannot exceed its memory budget. New syscall `setquota(33)` sets the calling process's cap (0 = unlimited), and `fork` inherits the cap. `agentstat` now also reports `rss_kb` / `quota_pg` / `qdenied` per process. The unit test `quotatest` (`QUOTA_TEST_PASS`) is folded into the autotest smoke gate; the `scheduler()` / `sched.c` HUMAN-GATE region is untouched. |
 | — | Input persistence | **File system (used, *not* modified)** | none — uses xv6's existing fs | The input log lives as a real file in the xv6 file system (`short.log`, copied in at `fs.img` build time); agents read it through standard `open(2)` / `read(2)`. This row is listed for completeness — we did **not** add to xv6's filesystem code, so it does **not** count toward the seven directly-implemented concepts above. |
 
-The directly-implemented count (rows 1–7, plus the two Phase 8/9
-subsystems in rows 8–9) already exceeds GuideLine
+The directly-implemented count (rows 1–7, plus the three added
+subsystems in rows 8–10) already exceeds GuideLine
 §2's "at least one, preferably more" requirement by a wide margin;
 we keep the file-system row visible because the killer scenario *does*
 flow data through real xv6 I/O rather than a back-channel, even
@@ -817,9 +820,10 @@ implementing every OS primitive its agent runtime depends on **inside
 xv6 source**, not by reaching for a Linux user-space library. Seven of
 the eight enumerated OS concepts (processes, synchronisation,
 scheduling, IPC, syscalls, isolation, observability) are directly
-implemented in modified xv6 code (§3 entries 1–7), and two Phase 8/9
-kernel subsystems (the verify+rollback verifier and the semantic
-response cache, §3 entries 8–9) extend them — nine directly-implemented
+implemented in modified xv6 code (§3 entries 1–7), and three added
+kernel subsystems (the verify+rollback verifier, the semantic
+response cache, and the per-process memory quota, §3 entries 8–10)
+extend them — ten directly-implemented
 mechanisms in total; the file system is
 used unmodified to deliver input. Threads are excluded because xv6
 does not support intra-process threading natively.
@@ -847,11 +851,11 @@ for the deferred experiments without a redesign.
 | `xv6-src/kernel/console.c` | per-write atomicity + echo disable | – |
 | `xv6-src/kernel/printf.c` | PANIC_DUMP | – |
 | `xv6-src/kernel/agent_log.h` | `AGENT_LOG` macro | – |
-| `xv6-src/kernel/sysproc.c`, `syscall.{c,h}` | eleven new syscalls (22–32) | – |
+| `xv6-src/kernel/sysproc.c`, `syscall.{c,h}` | twelve new syscalls (22–33) | – |
 | `xv6-src/user/triage.c` | five-stage pipeline orchestrator | – |
 | `xv6-src/user/parser.c` … `evaluator.c` | five agents | – |
 | `xv6-src/user/proxy_client.h` | header-only RPC, sleeplock-protected | – |
-| `xv6-src/user/{procfields,setrole,agentstat,proxytest,priotest,smoketest}.c` | verification programs | – |
+| `xv6-src/user/{procfields,setrole,agentstat,proxytest,priotest,smoketest,quotatest}.c` | verification programs | – |
 | `host/hello_upstage.py` | Upstage smoke (T-04) | – |
 | `host/proxy_pipe.py` | `Xv6Channel` (T-23) | – |
 | `host/proxy_daemon.py` | mock / live / replay | – |
@@ -883,8 +887,9 @@ python3 -m venv .venv
 pip install -r host/requirements.txt
 
 # 4. mock-mode automated gates (no network, deterministic)
-make regression          # 6-stage gate: boot+smoke (incl. verifiertest &
-                         #   cachetest) · xv6 shell · proxy hello(mock) ·
+make regression          # 6-stage gate: boot+smoke (incl. verifiertest,
+                         #   cachetest & quotatest/QUOTA_TEST_PASS) ·
+                         #   xv6 shell · proxy hello(mock) ·
                          #   test_verifier.sh (Pattern A) · test_cache.sh
                          #   (Pattern B) · capture_patterns.py (2-pattern evidence)
 python3 host/proxy_daemon.py --mode mock --triage short.log   # five-agent e2e

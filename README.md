@@ -38,15 +38,16 @@ proxy_call() 흐름:
 
 ## 직접 구현한 OS 메커니즘 (요약)
 
-GuideLine §2가 요구하는 "OS 컴포넌트는 직접 설계·구현"을 **7개 핵심 개념 + 2개 신규 커널 서브시스템**으로 충족한다.
+GuideLine §2가 요구하는 "OS 컴포넌트는 직접 설계·구현"을 **7개 핵심 개념 + 3개 신규 커널 서브시스템**으로 충족한다.
 
 | 분류 | 내용 |
 |---|---|
 | 핵심 7종 | 프로세스 관리(proc 메타) · IPC(pipe + 라인 프레이밍) · 동기화(sleeplock) · 스케줄링(priority) · 시스템 콜 · 프로세스 격리 |
 | **Pattern A** | **검증+롤백 닫힌 루프** — `kernel/verifier.c`(정수 전용 순수 검증기) + 시스콜 `verifyfix(27)`/`checkpoint(28)`/`restore(29)`. LLM은 *제안자*, 최종 권한은 커널 |
 | **Pattern B** | **커널 시맨틱 캐시 단락** — `kernel/cache.c`(FNV-1a exact + MinHash 의역 매칭 + `/cache.bin` 디스크 오버레이) + 시스콜 `cacheget(30)`/`cacheset(31)`/`cacheclear(32)`. hit 시 LLM 호출 생략 |
+| **메모리 관리 / 자원 제어** | **프로세스별 메모리 쿼터** — `kernel/proc.{h,c}`·`sysproc.c`에서 각 에이전트 프로세스의 resident heap을 상한. `growproc()`이 쿼터 초과 `sbrk`를 거부(-1 + `AGENT_LOG`), 시스콜 `setquota(33)`로 상한 설정(0=무제한), fork가 상한 상속. `agentstat`에 `rss_kb`/`quota_pg`/`qdenied` 노출 |
 
-신규 시스콜 **11종(22–32)**, 신규 커널 파일 `verifier.{c,h}`·`cache.{c,h}`.
+신규 시스콜 **12종(22–33)**, 신규 커널 파일 `verifier.{c,h}`·`cache.{c,h}`, 프로세스별 메모리 쿼터(`setquota(33)`).
 👉 9행 전체 매핑표·설계 근거·측정치는 **[`docs/TECHNICAL_REPORT.md`](docs/TECHNICAL_REPORT.md) §3 · §10.8**.
 
 ## 빠른 시작
