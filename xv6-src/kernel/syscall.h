@@ -32,3 +32,4 @@
 #define SYS_cacheget    30
 #define SYS_cacheset    31
 #define SYS_cacheclear  32
+#define SYS_setquota    33

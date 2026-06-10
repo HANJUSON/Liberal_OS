@@ -111,6 +111,11 @@ struct proc {
   char agent_role[16];         // "none" or one of parser/classifier/...
   int  priority;               // scheduler hint (0 = default)
   int  agent_state;            // free-form lifecycle marker used by Phase 3+
+
+  // Liberal_OS T-A1: per-process memory quota. The kernel caps each
+  // agent's resident heap; growth past the cap is denied in growproc().
+  int  mem_quota;              // resident page cap (0 = unlimited)
+  int  quota_denied;           // count of growth requests denied by the cap
 };
 
 // Global proc table. Defined in proc.c. Exposed here so that the panic

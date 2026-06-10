@@ -112,6 +112,7 @@ extern uint64 sys_restore(void);
 extern uint64 sys_cacheget(void);
 extern uint64 sys_cacheset(void);
 extern uint64 sys_cacheclear(void);
+extern uint64 sys_setquota(void);
 
 // An array mapping syscall numbers from syscall.h
 // to the function that handles the system call.
@@ -148,6 +149,7 @@ static uint64 (*syscalls[])(void) = {
 [SYS_cacheget]    sys_cacheget,
 [SYS_cacheset]    sys_cacheset,
 [SYS_cacheclear]  sys_cacheclear,
+[SYS_setquota]    sys_setquota,
 };
 
 void

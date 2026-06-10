@@ -53,3 +53,4 @@ entry("restore");
 entry("cacheget");
 entry("cacheset");
 entry("cacheclear");
+entry("setquota");

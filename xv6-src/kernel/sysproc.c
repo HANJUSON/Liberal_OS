@@ -184,8 +184,10 @@ sys_agentstat(void)
     if(!first)
       printf(",");
     first = 0;
-    printf("{\"pid\":%d,\"name\":\"%s\",\"role\":\"%s\",\"prio\":%d,\"st\":\"%s\"}",
-           p->pid, p->name, p->agent_role, p->priority, st);
+    printf("{\"pid\":%d,\"name\":\"%s\",\"role\":\"%s\",\"prio\":%d,\"st\":\"%s\","
+           "\"rss_kb\":%d,\"quota_pg\":%d,\"qdenied\":%d}",
+           p->pid, p->name, p->agent_role, p->priority, st,
+           (int)(p->sz / 1024), p->mem_quota, p->quota_denied);
   }
   printf("]\n");
   return 0;
@@ -205,6 +207,21 @@ sys_setprio(void)
   if (prio > 19)  prio = 19;
   prev = p->priority;
   p->priority = prio;
+  return prev;
+}
+
+// sys_setquota(int pages): cap the calling process's resident heap to
+// `pages` pages (0 = unlimited). growproc() denies any sbrk past the cap.
+// Returns the previous quota.
+uint64
+sys_setquota(void)
+{
+  int pages, prev;
+  struct proc *p = myproc();
+  argint(0, &pages);
+  if (pages < 0) pages = 0;
+  prev = p->mem_quota;
+  p->mem_quota = pages;
   return prev;
 }
 

@@ -168,6 +168,7 @@ UPROGS=\
 	$U/_priotest\
 	$U/_verifiertest\
 	$U/_cachetest\
+	$U/_quotatest\
 
 fs.img: mkfs/mkfs README $(UPROGS) ../samples/short.log
 	@cp ../samples/short.log _short.log

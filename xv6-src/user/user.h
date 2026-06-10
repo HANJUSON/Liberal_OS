@@ -39,6 +39,7 @@ int restore(void*, int);
 int cacheget(const char*, const char*, char*, int);
 int cacheset(const char*, const char*, const char*);
 int cacheclear(int);
+int setquota(int);
 
 // ulib.c
 int stat(const char*, struct stat*);

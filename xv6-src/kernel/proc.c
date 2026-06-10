@@ -5,6 +5,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "agent_log.h"
 
 struct cpu cpus[NCPU];
 
@@ -130,6 +131,8 @@ found:
   safestrcpy(p->agent_role, "none", sizeof(p->agent_role));
   p->priority = 0;
   p->agent_state = 0;
+  p->mem_quota = 0;            // T-A1: unlimited until setquota()
+  p->quota_denied = 0;
 
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
@@ -179,6 +182,8 @@ freeproc(struct proc *p)
   p->agent_role[0] = 0;
   p->priority = 0;
   p->agent_state = 0;
+  p->mem_quota = 0;
+  p->quota_denied = 0;
   p->state = UNUSED;
 }
 
@@ -255,6 +260,17 @@ growproc(int n)
     if(sz + n > TRAPFRAME) {
       return -1;
     }
+    // Liberal_OS T-A1: enforce the per-process memory quota. The kernel
+    // caps each agent's resident pages; a request that would push the
+    // process past its cap is denied (sbrk then returns -1 to the agent).
+    if(p->mem_quota > 0 &&
+       PGROUNDUP(sz + n) / PGSIZE > (uint64)p->mem_quota){
+      p->quota_denied++;
+      AGENT_LOG("warn", "quota: pid=%d role=%s denied grow to %d pages (cap=%d)",
+                p->pid, p->agent_role,
+                (int)(PGROUNDUP(sz + n) / PGSIZE), p->mem_quota);
+      return -1;
+    }
     if((sz = uvmalloc(p->pagetable, sz, sz + n, PTE_W)) == 0) {
       return -1;
     }
@@ -306,6 +322,7 @@ kfork(void)
   safestrcpy(np->agent_role, p->agent_role, sizeof(np->agent_role));
   np->priority = p->priority;
   np->agent_state = p->agent_state;
+  np->mem_quota = p->mem_quota;   // T-A1: inherit the cap (counter resets)
 
   pid = np->pid;
 
