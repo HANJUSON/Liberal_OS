@@ -111,7 +111,9 @@
 - T-90 `[x]` regression 3→5단계(+test_verifier+test_cache), autotest 스모크에 verifiertest/cachetest 추가. 커밋 `6050989`.
 - T-91 `[x]` TECHNICAL_REPORT §3 매핑표 +2행(verifier·cache) + §10.8 두 패턴 서술. 커밋 `16662f8`.
 - T-92 `[x]` 본 STATUS Phase 8/9/10 완료 기록(이 항목). README 갱신 권장은 §5 참조.
-- T-93 `[ ]` 최종 완료 게이트(§6) 실행 — 다음 작업.
+- T-93 `[x]` 최종 완료 게이트(§6) 실행 — G1~G9 전부 PASS. 게이트 중 `test_verifier.sh`가 warm `/cache.bin`에서 모든 PROXY_REQ가 캐시 단락돼 `served={}`로 비결정적이던 문제 발견 → test_cache.sh처럼 **fs.img 재생성(빈 캐시) 추가**로 결정화. **루프 DONE.**
+
+**§6 게이트 결과**: G1 빌드 OK · G2 5단계 regression PASS · G3 test_verifier(ok=True, eval_retries=2) · G4 test_cache(proxy_reqs_saved=2) · G5 patterns_demo(CACHE HIT+ROLLBACK) · G6 신규 시스콜 6종(27–32) · G7 키 누설 0 · G8 동결문서 변경 0(833f523..HEAD) · G9 T-80~T-92 전부 [x].
 
 **신규 시스콜 누적**: `verifyfix(27)`, `checkpoint(28)`, `restore(29)`, `cacheget(30)`, `cacheset(31)`, `cacheclear(32)` — 기존 26 → 32. 신규 커널 파일: `verifier.{c,h}`, `cache.{c,h}`.
 

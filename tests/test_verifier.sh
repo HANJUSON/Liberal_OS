@@ -23,6 +23,12 @@ mkdir -p "$OUT_DIR"
 # Zombie sweep so a previous aborted run doesn't hold the serial.
 pkill -f qemu-system-riscv64 >/dev/null 2>&1 || true
 
+# Fresh fs.img => empty /cache.bin. Without this, a warm response cache from
+# a prior run would short-circuit every PROXY_REQ (served={}), so the run's
+# roles would be unserved and ok=false even though the verify+rollback loop
+# itself fired. A clean cache makes each stage's first prompt a real call.
+( cd "$ROOT/xv6-src" && rm -f fs.img && make fs.img ) >/dev/null 2>&1
+
 cd "$ROOT"
 python3 host/proxy_daemon.py --mode mock --triage short.log > "$JSON" 2>/dev/null
 
