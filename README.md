@@ -48,7 +48,7 @@ GuideLine §2가 요구하는 "OS 컴포넌트는 직접 설계·구현"을 **7�
 | **메모리 관리 / 자원 제어** | **프로세스별 메모리 쿼터** — `kernel/proc.{h,c}`·`sysproc.c`에서 각 에이전트 프로세스의 resident heap을 상한. `growproc()`이 쿼터 초과 `sbrk`를 거부(-1 + `AGENT_LOG`), 시스콜 `setquota(33)`로 상한 설정(0=무제한), fork가 상한 상속. `agentstat`에 `rss_kb`/`quota_pg`/`qdenied` 노출 |
 
 신규 시스콜 **12종(22–33)**, 신규 커널 파일 `verifier.{c,h}`·`cache.{c,h}`, 프로세스별 메모리 쿼터(`setquota(33)`).
-👉 9행 전체 매핑표·설계 근거·측정치는 **[`docs/TECHNICAL_REPORT.md`](docs/TECHNICAL_REPORT.md) §3 · §10.8**.
+👉 10행 전체 매핑표·설계 근거·측정치는 **[`docs/TECHNICAL_REPORT.md`](docs/TECHNICAL_REPORT.md) §3 · §10.8**.
 
 ## 빠른 시작
 
