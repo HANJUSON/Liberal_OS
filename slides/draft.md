@@ -88,7 +88,7 @@ Worker agent                              Evaluator agent
 
 ## Slide 5 — Part 2: OS Adaptation (brief)
 
-**Where the OS shows up — 9 mechanisms designed, 1 reused.**
+**Where the OS shows up — 10 mechanisms designed, 1 reused.**
 
 | # | Component                     | OS concept                       | xv6 file(s) we modified                                |
 |---|-------------------------------|----------------------------------|--------------------------------------------------------|
@@ -101,13 +101,14 @@ Worker agent                              Evaluator agent
 | 7 | Introspection                 | System calls (5 — nos. 22–26)    | `syscall.{c,h}`, `sysproc.c`                           |
 | 8 | Kernel verify + rollback (**Pattern A**) | Kernel verifier + checkpoint (3 syscalls — 27–29) | `kernel/verifier.{c,h}`, `sysproc.c`         |
 | 9 | In-kernel semantic cache (**Pattern B**) | File system + system calls (3 syscalls — 30–32)   | `kernel/cache.{c,h}`, `mkfs/mkfs.c`, `sysproc.c` |
+| 10 | Per-process memory quota (**T-A1**) | Memory management / resource control (1 syscall — 33) | `proc.{h,c}` (`growproc`), `sysproc.c`          |
 | – | Agent context persistence     | File system (reused, read-only)  | xv6 fs (no kernel mod yet — F-01)                      |
 
 - Rule of thumb: if it could have been `multiprocessing` or `cgroups`, we did **not** use it.
 - **12 new syscalls shipped (nos. 22–33)** — from `setrole(2)` / `agentstat(2)` introspection
   through the **verify+rollback** (27–29) and **semantic-cache** (30–32) families — plus a userspace `priotest`.
 
-**Two kernel-level patterns that set this work apart (rows 8 & 9):**
+**Three kernel additions that set this work apart (rows 8–10):**
 
 - **Pattern A — in-kernel verifier (`kernel/verifier.c`, syscalls 27–29):** every LLM-proposed fix is guarded by field / range / whitelist / protected-process checks before it can take effect. **FAIL → restore (pid-tagged checkpoint) + amend the fix per the kernel's verdict code → retry; PASS → accept.** Convergence is *verdict-driven*: the correction is a causal function of *why* the kernel rejected the fix (`VERIFY_ERR_RANGE` → clamp severity, etc.), not a retry counter. The kernel, not userspace, owns the safety contract.
 - **Pattern B — in-kernel response cache (`kernel/cache.c`, syscalls 30–32):** short-circuits the LLM call *before* a `PROXY_REQ` is even emitted — **FNV-1a** exact match + **MinHash/Jaccard** semantic (paraphrase) match, backed by a `/cache.bin` disk overlay. Caching becomes an OS service, not a per-script dict.

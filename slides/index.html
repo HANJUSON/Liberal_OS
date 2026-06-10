@@ -725,7 +725,7 @@
     <!-- =================================================== Slide 5 — OS Adaptation -->
     <section class="slide" data-title="OS Adaptation">
       <div class="eyebrow">Part 2 · OS Adaptation</div>
-      <h2 class="heading">9 mechanisms designed, 1 reused — at the kernel level.</h2>
+      <h2 class="heading">10 mechanisms designed, 1 reused — at the kernel level.</h2>
 
       <div class="content">
         <table class="matrix">
@@ -742,11 +742,12 @@
             <tr><td class="num">7</td><td>Introspection</td><td>System calls (5 — nos. 22–26)</td><td><code>syscall.{c,h}</code>, <code>sysproc.c</code></td></tr>
             <tr><td class="num">8</td><td>Kernel verify + rollback (<strong>Pattern A</strong>)</td><td>Kernel verifier + checkpoint (3 syscalls — 27–29)</td><td><code>kernel/verifier.{c,h}</code>, <code>sysproc.c</code></td></tr>
             <tr><td class="num">9</td><td>In-kernel semantic cache (<strong>Pattern B</strong>)</td><td>File system + system calls (3 syscalls — 30–32)</td><td><code>kernel/cache.{c,h}</code>, <code>mkfs/mkfs.c</code>, <code>sysproc.c</code></td></tr>
+            <tr><td class="num">10</td><td>Per-process memory quota (<strong>T-A1</strong>)</td><td>Memory management / resource control (1 syscall — 33)</td><td><code>proc.{h,c}</code> (<code>growproc</code>), <code>sysproc.c</code></td></tr>
             <tr class="reused"><td class="num">–</td><td>Agent context persistence</td><td>File system (reused, read-only)</td><td>xv6 fs (no kernel mod yet · F-01)</td></tr>
           </tbody>
         </table>
 
-        <p class="note">Rule of thumb: if it could have been <code class="inline">multiprocessing</code> or <code class="inline">cgroups</code>, we did <strong>not</strong> use it. <strong>11 new syscalls shipped (nos. 22–32)</strong> — from <code class="inline">setrole(2)</code> / <code class="inline">agentstat(2)</code> introspection through the <strong>verify+rollback</strong> (27–29) and <strong>semantic-cache</strong> (30–32) families — plus a userspace <code class="inline">priotest</code>. <strong>Pattern A</strong>: kernel verifier guards every LLM fix — FAIL → checkpoint/restore rollback + retry; PASS → accept. <strong>Pattern B</strong>: FNV-1a exact + MinHash/Jaccard semantic match short-circuits the LLM call before <code class="inline">PROXY_REQ</code> is even emitted, backed by a <code class="inline">/cache.bin</code> disk overlay.</p>
+        <p class="note">Rule of thumb: if it could have been <code class="inline">multiprocessing</code> or <code class="inline">cgroups</code>, we did <strong>not</strong> use it. <strong>12 new syscalls shipped (nos. 22–33)</strong> — from <code class="inline">setrole(2)</code> / <code class="inline">agentstat(2)</code> introspection through the <strong>verify+rollback</strong> (27–29), <strong>semantic-cache</strong> (30–32), and <strong>memory-quota</strong> (<code class="inline">setquota(33)</code>) families — plus a userspace <code class="inline">priotest</code>. <strong>Pattern A</strong>: kernel verifier guards every LLM fix — FAIL → restore + amend per the kernel's verdict code → retry; PASS → accept (verdict-driven convergence). <strong>T-A1</strong>: <code class="inline">growproc</code> caps each agent's resident memory; <code class="inline">sbrk</code> past the quota is denied. <strong>Pattern B</strong>: FNV-1a exact + MinHash/Jaccard semantic match short-circuits the LLM call before <code class="inline">PROXY_REQ</code> is even emitted, backed by a <code class="inline">/cache.bin</code> disk overlay.</p>
       </div>
     </section>
 
@@ -801,8 +802,8 @@
 
               <!-- New syscalls badge -->
               <rect x="55" y="258" width="210" height="32" rx="2" ry="2" fill="#f7f7f7" stroke="#cccccc"/>
-              <text x="160" y="270" text-anchor="middle" font-size="9" font-weight="700" fill="#757575" letter-spacing="1.2">NEW SYSCALLS · 11 TOTAL</text>
-              <text x="160" y="285" text-anchor="middle" font-size="11" font-weight="700" fill="#000">nos. 22–32  (verify+rollback · cache)</text>
+              <text x="160" y="270" text-anchor="middle" font-size="9" font-weight="700" fill="#757575" letter-spacing="1.2">NEW SYSCALLS · 12 TOTAL</text>
+              <text x="160" y="285" text-anchor="middle" font-size="11" font-weight="700" fill="#000">nos. 22–33  (verify+rollback · cache · quota)</text>
 
               <!-- Proxy Daemon box -->
               <rect x="340" y="80" width="240" height="220" rx="2" ry="2" fill="#ffffff" stroke="#000000" stroke-width="2"/>
@@ -941,8 +942,8 @@
         <div class="stats-row">
           <div class="stat">
             <div class="corner"></div>
-            <div class="stat-num">11</div>
-            <div class="stat-cap">new syscalls shipped — nos. 22–32 (introspection · verify+rollback · semantic cache).</div>
+            <div class="stat-num">12</div>
+            <div class="stat-cap">new syscalls shipped — nos. 22–33 (introspection · verify+rollback · semantic cache · memory quota).</div>
           </div>
           <div class="stat">
             <div class="corner"></div>
@@ -981,7 +982,7 @@
           </div>
         </div>
 
-        <p class="note">Talking point: five LLM agents, one evaluator-supervisor, one priority scheduler, <strong>eleven new syscalls (nos. 22–32) — including kernel verify+rollback and a semantic response cache</strong> — reproducible, measurable, and isolated <strong>at the OS level, by construction</strong>.</p>
+        <p class="note">Talking point: five LLM agents, one evaluator-supervisor, one priority scheduler, <strong>twelve new syscalls (nos. 22–33) — including kernel verify+rollback, a semantic response cache, and a per-process memory quota</strong> — reproducible, measurable, and isolated <strong>at the OS level, by construction</strong>.</p>
       </div>
     </section>
 
