@@ -102,7 +102,13 @@ Worker agent                          Evaluator agent
 | – | Agent context persistence| File system (reused)    | xv6 fs (no kernel mod yet — F-01) |
 
 - Rule of thumb: if it could have been `multiprocessing` or `cgroups`, we did **not** use it.
-- Two new syscalls shipped: **`setrole(2)`** and **`agentstat(2)`** + a userspace `priotest`.
+- **11 new syscalls shipped (nos. 22–32)** — from `setrole(2)` / `agentstat(2)` introspection
+  through the **verify+rollback** (27–29) and **semantic-cache** (30–32) families — plus a userspace `priotest`.
+
+**Two kernel-level patterns that set this work apart:**
+
+- **Pattern A — in-kernel verifier (`kernel/verifier.c`, syscalls 27–29):** every LLM-proposed fix is guarded by field / range / whitelist / protected-process checks before it can take effect. **FAIL → checkpoint/restore rollback + retry; PASS → accept.** The kernel, not userspace, owns the safety contract.
+- **Pattern B — in-kernel response cache (`kernel/cache.c`, syscalls 30–32):** short-circuits the LLM call *before* a `PROXY_REQ` is even emitted — **FNV-1a** exact match + **MinHash/Jaccard** semantic (paraphrase) match, backed by a `/cache.bin` disk overlay. Caching becomes an OS service, not a per-script dict.
 
 ---
 
@@ -193,7 +199,7 @@ Worker agent                          Evaluator agent
 
 **Talking-point summary**
 - Five LLM agents, each a real xv6 process.
-- One evaluator, one priority scheduler, two new syscalls.
+- One evaluator, one priority scheduler, eleven new syscalls (nos. 22–32) — including kernel verify+rollback and a semantic response cache.
 - Reproducible, measurable, and isolated — at the OS level, by construction.
 
 ---

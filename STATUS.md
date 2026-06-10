@@ -4,7 +4,7 @@
 > Design SSoT는 `MASTER_PLAN.md` Part I (§1~§10, 부록).
 > 작업 규칙/도구 정책은 `CLAUDE.md`.
 
-**Last updated**: 2026-06-08
+**Last updated**: 2026-06-10
 **Convention**: 본 문서는 PROGRESS.md / BLOCKED.md / MASTER_PLAN.md Part II(§11~§20)를 흡수한 단일 운영 페이지다. 과거 분리 문서는 git history 참조.
 
 ---
@@ -14,9 +14,10 @@
 | 항목 | 상태 |
 |---|---|
 | 브랜치 | `main`, `origin/main` 대비 ahead — push는 사람 |
-| T-NN 작업 큐 (T-01 ~ T-72) | 자율 처리 가능분 39건 모두 `[x]` DONE |
+| T-NN 작업 큐 (T-01 ~ T-93) | 자율 처리 가능분 전부 `[x]` DONE |
+| Phase 8-10 (패턴 A/B 닫힌 루프) | 완료 — T-80~T-93 전부 `[x]`, 자율 루프 DONE |
 | 진행 중인 T-NN | 없음 |
-| 블로커 | 없음 |
+| 블로커 | 없음 (§5 블로커 해소됨) |
 | 남은 사람 작업 | 4건 (아래 §4) |
 
 ---
@@ -133,6 +134,10 @@
 ---
 
 ## 5. 블로커
+
+> **✅ 해소됨 (2026-06-10).** GOAL_PATTERNS 루프는 **완료**되었다 — T-80~T-93 전부 `[x]` DONE, `make regression` 6단계 게이트 PASS. 아래 서술은 루프 진행 중의 역사적 기록이며 열린 블로커가 아니다.
+>
+> **후속 작업(알려진 한계, future task)**: `retry_context`(호스트→evaluator 위반사유 재주입)는 현재 증거로만 기록되고 모델 입력에는 미반영 — (1) 라인 누적으로 PROXY_RES 프레이밍이 깨질 수 있고 (2) 커널 캐시가 동일 프롬프트 retry를 단락하기 때문. 실제 수정은 게스트(evaluator)가 위반사유를 다음 프롬프트에 임베드하고 라인별로 bound하는 guest-side 작업.
 
 ### T-80 (및 GOAL_PATTERNS 루프 전체) — BLOCKED at 2026-06-10 (loop 1/60)
 
@@ -299,16 +304,16 @@ README §6에 인덱스 표 + 각 스크린샷 캡션 임베드 완료.
 - `MASTER_PLAN.md` / `MASTER_PLAN.en.md` Part II(§11~§20) + §19 진행 현황 요약 → 본 문서로 이전, 설계 SSoT만 남김.
 - `files/` 디렉토리(legacy harness drop-in) → root 소유라 사용자 권한으로 삭제 불가. 사람이 `sudo rm -rf files/` 직접 실행 권장. `.gitignore` 등록되어 있어 repo에는 영향 없음.
 
-### 10.2 남은 dangling 참조 (이번 권한 범위 밖)
-결정 문서/제출 산출물에 이전 파일·섹션 참조가 남아 있다. 본 정리 작업은 `MASTER_PLAN.md` 본문 수정만 명시 승인 받았으므로 아래는 손대지 않았다 — 사람 판단으로 갱신 필요.
+### 10.2 dangling 참조 (2026-06-10 해소됨)
+이전 파일·섹션 참조(`BLOCKED.md`, `MASTER_PLAN.md Part II`)가 결정/제출 문서에 남아 있었으나, 사람 승인 하에 동결 문서 포함 전부 갱신했다. `BLOCKED.md`→`STATUS.md §5`, `MASTER_PLAN.md Part II`→`STATUS.md §3`로 치환(역사적 서술은 "(now STATUS.md §5)" 주석).
 
-| 파일 | 참조 | 권장 갱신 |
+| 파일 | 참조 | 상태 |
 |---|---|---|
-| `CLAUDE.md` §1.6, §1.8, §2.1, §2.3, §2.4, §3, §10, §11 | `BLOCKED.md`, `MASTER_PLAN.md Part II (§11~§18)` | 모두 `STATUS.md`로 치환 |
-| `HARNESS.md` §1.4, §4.4, §6.x, §7.x, §8 체크리스트, §11 FAQ | `BLOCKED.md` | `STATUS.md §5 블로커`로 치환 |
-| `PROCESS.md` §1.2, §4 (`I-NN` 이슈), §5, §7 | `BLOCKED.md`, `MASTER_PLAN.md Part II` | 강의 제출물 — 제출 시점 판단 |
-| `docs/TECHNICAL_REPORT.md` (`BLOCKED.md` 언급) | `BLOCKED.md` 프로토콜 설명 | 강의 제출물 — 제출 시점 판단 |
-| `slides/draft.md` Slide 16 | `MASTER_PLAN.md Part II` | 강의 제출물 — 제출 시점 판단 |
+| `CLAUDE.md` | `BLOCKED.md`, `MASTER_PLAN.md Part II` | ✅ `STATUS.md §5/§3`로 치환 완료 |
+| `HARNESS.md` | `BLOCKED.md`, `MASTER_PLAN.md Part II` | ✅ `STATUS.md §5/§3`로 치환 완료 |
+| `PROCESS.md` | `BLOCKED.md`, `MASTER_PLAN.md Part II` | ✅ `STATUS.md §5/§3`로 치환 완료 |
+| `docs/TECHNICAL_REPORT.md` | `BLOCKED.md`, Part II | ✅ `STATUS.md §5/§3`로 치환 완료 |
+| `README.md` | OS-매핑표에 Pattern A/B 부재 | ✅ §3에 행 8·9 추가, 시스콜 카운트 정정 완료 |
 
 ### 10.3 권한 범위
 - **이번 정리 대상**: `MASTER_PLAN.md`, `MASTER_PLAN.en.md`, `PROGRESS.md`, `BLOCKED.md`, `files/`.

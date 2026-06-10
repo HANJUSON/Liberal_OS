@@ -16,7 +16,7 @@
 | 호스트 측 중계 | Python 3.11+ (`openai`, `python-dotenv`), virtio console |
 | 빌드 | GNU make, RISC-V 64-bit GCC 툴체인 (`riscv64-linux-gnu-gcc` 또는 `riscv64-unknown-elf-gcc` — Makefile이 자동 감지) |
 
-직접 수정·신규 추가한 xv6 파일: `kernel/proc.{h,c}`, `kernel/console.c`, `kernel/syscall.{c,h}`, `kernel/sysproc.c`, `kernel/printf.c`, `user/usys.pl`, `user/user.h` + 신규 유저 프로그램(`triage`, `parser`, `classifier`, `rootcause`, `fixsuggest`, `evaluator`, `agentstat`, `setrole`, `priotest`, `procfields`, `proxytest`, `smoketest`, `logstress`).
+직접 수정·신규 추가한 xv6 파일: `kernel/proc.{h,c}`, `kernel/console.c`, `kernel/syscall.{c,h}`, `kernel/sysproc.c`, `kernel/printf.c`, `kernel/verifier.{c,h}`, `kernel/cache.{c,h}`, `user/usys.pl`, `user/user.h` + 신규 유저 프로그램(`triage`, `parser`, `classifier`, `rootcause`, `fixsuggest`, `evaluator`, `agentstat`, `setrole`, `priotest`, `procfields`, `proxytest`, `smoketest`, `logstress`, `verifiertest`, `cachetest`).
 
 ## 3. OS 개념 매핑 (GuideLine §2 필수 제약)
 
@@ -28,9 +28,13 @@
 | 4 | 동시 console·proxy 접근 | **동기화 (sleeplock)** | `cons_write_lock` + `proxy_lock`; 신규 시스콜 `proxylock(2)`/`proxyunlock(2)` |
 | 5 | 에이전트 우선순위 | **스케줄링** | `scheduler()`에 max-priority 2-pass 선택 + `setprio(2)` 신규 시스콜 (nice-style [-20, 19] 클램프) |
 | 6 | 장애 격리 | **프로세스 격리** | xv6 page-table 격리를 활용; `procfields` 테스트로 fork+pipe 의미 보존 검증 |
-| 7 | 관측성 | **시스템 콜** | 신규 시스콜 6종: `setrole(22)`, `agentstat(23)`, `proxylock(24)`, `proxyunlock(25)`, `setprio(26)` + panic dump |
+| 7 | 관측성 | **시스템 콜** | 신규 시스콜 5종(22-26): `setrole(22)`, `agentstat(23)`, `proxylock(24)`, `proxyunlock(25)`, `setprio(26)` + panic dump |
+| 8 | verify+rollback closed loop (Pattern A) | **커널 검증·체크포인트** | `kernel/verifier.c` (정수 전용 순수함수 검증기 — LLM 제안 fix의 field/range/action-whitelist/protected-process 불변식 검사); 신규 시스콜 `verifyfix(27)`, `checkpoint(28)`, `restore(29)`. evaluator가 verify→FAIL:rollback(`restore`)+재시도 / PASS:`checkpoint`+accept |
+| 9 | in-kernel semantic 응답 캐시 (Pattern B) | **커널 캐시 (의미 매칭·디스크 오버레이)** | `kernel/cache.c` — FNV-1a 64-bit exact + MinHash 시그니처/정수 Jaccard semantic(paraphrase) 매칭 + `/cache.bin` 디스크 오버레이; 신규 시스콜 `cacheget(30)`, `cacheset(31)`, `cacheclear(32)`. `user/proxy_client.h` `proxy_call()`에 결선 — 모든 에이전트가 PROXY_REQ 전 캐시 조회, hit 시 `CACHE_HIT` emit하고 LLM 호출 생략 |
 
-GuideLine §2가 요구하는 "최소 한 가지, 가능하면 그 이상"의 OS 개념을 **7개 직접 구현**. 설계 근거와 구현 디테일은 [`docs/TECHNICAL_REPORT.md`](docs/TECHNICAL_REPORT.md) §3·§5 참조.
+위 5종(22-26)에 Pattern A/B의 신규 시스콜 6종(`verifyfix(27)`~`cacheclear(32)`)을 더해 **신규 시스콜 11종(22-32)**.
+
+GuideLine §2가 요구하는 "최소 한 가지, 가능하면 그 이상"의 OS 개념을 **7개 핵심 + 2개 신규 서브시스템(Pattern A/B) 직접 구현**. 설계 근거와 구현 디테일은 [`docs/TECHNICAL_REPORT.md`](docs/TECHNICAL_REPORT.md) §3·§5 참조.
 
 ## 4. 셋업 안내
 
@@ -120,7 +124,8 @@ live 모드 주의:
 
 ```bash
 make autotest                # 60s 헤드리스 xv6 부팅 + smoke 통과
-make regression              # 커밋 전 회귀 게이트 (autotest + xv6 shell + proxy mock)
+make regression              # 커밋 전 회귀 게이트 6-stage (autotest + xv6 shell + proxy hello(mock)
+                             #   + test_verifier + test_cache + capture_patterns 2-pattern 증거)
 bash bench/run_all.sh        # 5개 실험 5회 반복 (사람만 실행, Upstage 호출 비용 발생)
 python3 bench/report.py out/bench/ > out/REPORT.md
 ```

@@ -33,7 +33,7 @@
 ### 1.2 운영 방식
 
 - **단일 메인 브랜치 + worktree 분리**: `main` 브랜치를 트렁크로 사용하고, 각 역할마다 git worktree를 만들어 충돌을 최소화. 자세한 운영 규칙은 `HARNESS.md` §6.
-- **Claude Code 자율 작동**: 작업 단위 T-NN을 SSoT(`MASTER_PLAN.md` Part II)에 두고, CC가 의존성·검증 명령을 따라 작업을 큐에서 꺼내 수행. 사람은 **회귀 게이트**(`make regression`)와 🔴 **HUMAN GATE** 태스크만 직접 검토.
+- **Claude Code 자율 작동**: 작업 단위 T-NN을 SSoT(`STATUS.md` §3)에 두고, CC가 의존성·검증 명령을 따라 작업을 큐에서 꺼내 수행. 사람은 **회귀 게이트**(`make regression`)와 🔴 **HUMAN GATE** 태스크만 직접 검토.
 - **주 1회 동기 미팅**: 화요일 19:00 (90분), 비동기 진척 보고는 매일 저녁.
 - **결정·일정의 SSoT**: `MASTER_PLAN.md`. 모든 의사결정은 본 문서 §3에 요약하고 SSoT에 반영.
 
@@ -140,7 +140,7 @@
 ### D-06 — Claude Code 자율 작동 하네스 도입
 - **언제**: 2026-05-19
 - **근거**: 4인 팀이 *동시에* 다른 영역을 진행할 수 있어야 학기 일정을 맞춘다. CC의 자율 루프가 회귀 게이트 안에서 안전하게 도는 것을 입증할 수 있다면, 사람은 게이트 통과 PR과 🔴 HUMAN GATE만 살피면 된다.
-- **이행**: `HARNESS.md`. `CLAUDE.md`가 운영 매뉴얼, `MASTER_PLAN.md` Part II가 작업 큐.
+- **이행**: `HARNESS.md`. `CLAUDE.md`가 운영 매뉴얼, `STATUS.md` §3가 작업 큐.
 
 ### D-07 — `make regression`을 커밋 전 의무화
 - **언제**: 2026-05-20 (3rd meeting)
@@ -155,7 +155,7 @@
 ### D-09 — ImplementationPlan + TASKS → MASTER_PLAN으로 통합
 - **언제**: 2026-05-26 (5th meeting)
 - **근거**: 결정 문서(ImplementationPlan)와 작업 큐(TASKS)가 분리되어 있으면 의사결정의 *근거*와 *작업 단위*가 연결되지 않는다. 단일 SSoT로 통합.
-- **이행**: `MASTER_PLAN.md` Part I (설계) + Part II (T-NN 큐). 한 파일에서 결정→작업 추적.
+- **이행**: `MASTER_PLAN.md` Part I (설계) + `STATUS.md` §3 (T-NN 큐). 결정→작업 추적.
 
 ### D-10 — T-62/T-73을 사람 전담으로 명시
 - **언제**: 2026-05-26
@@ -166,12 +166,12 @@
 
 ## 4. 이슈 해결 이력
 
-> 작업 중 막혔거나 설계 가정이 흔들렸던 사건들. BLOCKED.md 해소 이력과 git 커밋 메시지로 보강.
+> 작업 중 막혔거나 설계 가정이 흔들렸던 사건들. BLOCKED.md (now STATUS.md §5) 해소 이력과 git 커밋 메시지로 보강.
 
 ### I-01 — xv6 빌드 환경 (Resolved 2026-05-20)
 - **증상**: T-03 (xv6 빌드 환경 검증) 초기 시도 시 RISC-V 툴체인 누락 가능성.
 - **원인**: Ubuntu 24.04 패키지명 일부 변경. `qemu-system-misc`, `gcc-riscv64-linux-gnu`, `binutils-riscv64-linux-gnu`, `gdb-multiarch` 모두 필요.
-- **해결**: BLOCKED.md 해소 이력에 따라 모두 설치 후 `cd xv6-src && make qemu`로 `init: starting sh` 도달 확인.
+- **해결**: BLOCKED.md (now STATUS.md §5) 해소 이력에 따라 모두 설치 후 `cd xv6-src && make qemu`로 `init: starting sh` 도달 확인.
 
 ### I-02 — virtio serial이 너무 무겁다 (Resolved 2026-05-20)
 - **증상**: T-23 (virtio serial 채널 설정) 초기 검토에서 xv6에 virtio-serial 디바이스 드라이버가 없음을 확인. 직접 작성하는 비용이 큼.
@@ -257,7 +257,7 @@
 
 - **Sonnet 기본, Opus는 핵심 설계만**: CLAUDE.md §9 모델 선택 가이드대로. 시스템 콜 추가/테스트 작성/커밋 메시지는 Sonnet, proc 구조체 확장/스케줄러 알고리즘은 Opus.
 - **컨텍스트 절약**: 큰 로그(`samples/*.log`)나 bench JSON 25개를 통째로 읽지 않는다. `head`/`grep`/`bench/summarize.py`로 추출 후 요약본만 읽음 (CLAUDE.md §8).
-- **막혔을 때**: 같은 검증 3회 실패 또는 30분 정체 시 BLOCKED.md 기록 → 다음 의존성 없는 작업으로 이동. CLAUDE.md §10. 실 운영에서 이 규칙으로 인해 무한 루프에 빠진 적 없음.
+- **막혔을 때**: 같은 검증 3회 실패 또는 30분 정체 시 STATUS.md §5 기록 → 다음 의존성 없는 작업으로 이동. CLAUDE.md §10. 실 운영에서 이 규칙으로 인해 무한 루프에 빠진 적 없음.
 
 ---
 
@@ -287,7 +287,7 @@
 - `HARNESS.md` — 하네스 설계 문서
 - `CLAUDE.md` — Claude Code 운영 매뉴얼
 - `docs/TECHNICAL_REPORT.md` — 기술 보고서 (5,000+ 단어)
-- `BLOCKED.md` — 막힘 보고 + 해소 이력
+- `STATUS.md` §5 — 막힘 보고 + 해소 이력
 - `out/REPORT.md` — 실험 결과 자동 생성본
 
 *문서 끝.*

@@ -33,8 +33,8 @@
 | 종류 | 파일 |
 |---|---|
 | 운영 매뉴얼 | `CLAUDE.md` |
-| 작업 큐 | `MASTER_PLAN.md` (Part II) |
-| 막힘 보고 | `BLOCKED.md` |
+| 작업 큐 | `STATUS.md §3` |
+| 막힘 보고 | `STATUS.md §5` |
 | 도구 권한 | `.claude/settings.json` |
 | 자동 검증 | `tests/autotest.sh`, `tests/regression.sh` |
 | 디버깅 인프라 | `tests/gdb_on_panic.sh`, 커널 PANIC_DUMP 매크로 |
@@ -82,7 +82,7 @@ xv6 프로젝트는 다르다:
 
 CC가 자율적으로 돌려면 "지금 뭘 해야 하나"를 코드 외부에서 알 수 있어야 한다. 매번 사람이 지시하면 자율이 아니다.
 
-**구현**: `MASTER_PLAN.md` (Part II) — 의존성 그래프와 검증 명령이 명시된 작업 큐.
+**구현**: `STATUS.md §3` — 의존성 그래프와 검증 명령이 명시된 작업 큐.
 
 ### 기둥 ② 빠른 검증 루프
 
@@ -135,7 +135,7 @@ Claude Code가 모든 세션 시작 시 자동으로 읽는 파일. 내용:
 
 **원칙**: 한 번 작성 후 거의 수정하지 않는다. 수정은 팀 회의에서 결정.
 
-### 4.2 `MASTER_PLAN.md` (Part II) — 작업 큐
+### 4.2 `STATUS.md §3` — 작업 큐
 
 7개 Phase, 약 50~60개 작업. 각 작업은:
 - ID (T-NN)
@@ -179,9 +179,9 @@ Claude Code가 모든 세션 시작 시 자동으로 읽는 파일. 내용:
 
 승인 prompt를 줄여 자율 작동을 가능하게 만드는 핵심 파일.
 
-### 4.4 `BLOCKED.md` — 막힘 보고
+### 4.4 `STATUS.md §5` — 막힘 보고
 
-CC가 막혔을 때 자동으로 기록하는 파일. 사람이 매일 아침 확인.
+CC가 막혔을 때 자동으로 기록하는 블로커 원장. 사람이 매일 아침 확인.
 
 형식:
 ```markdown
@@ -311,7 +311,7 @@ git worktree add ../liberal_os-harness feature/harness
 - **`xv6-src/kernel/`** 만지는 작업은 항상 `kernel` worktree
 - **`xv6-src/user/agent_*.c`** 는 항상 `agent` worktree
 - **`bench/`, `host/proxy_daemon.py`** 는 명확히 분리
-- 공유 파일(`CLAUDE.md`, `MASTER_PLAN.md` (Part II))은 메인에서 심볼릭 링크
+- 공유 파일(`CLAUDE.md`, `STATUS.md §3`)은 메인에서 심볼릭 링크
 
 ### 6.4 머지 흐름
 
@@ -346,27 +346,27 @@ QEMU_GDB_PORT = 26300
 
 ### 7.1 아침 (사람 30분)
 
-1. 어제 마지막 자율 작동의 `BLOCKED.md` 읽기
+1. 어제 마지막 자율 작동의 `STATUS.md §5` 읽기
 2. 각 worktree의 `git log --oneline -10`로 진행 확인
 3. 머지 가능한 브랜치를 main에 머지
 4. HUMAN GATE 작업 (예: T-50, T-51) 도달 여부 확인 후 승인/거부
-5. 필요 시 `MASTER_PLAN.md` (Part II)에 새 작업 추가
+5. 필요 시 `STATUS.md §3`에 새 작업 추가
 6. 각 worktree에 `claude` 실행 + "다음 작업 진행하세요" 한 줄 입력
 
 ### 7.2 점심 체크 (사람 5분)
 
-1. `BLOCKED.md` 추가된 항목 있는지 확인
+1. `STATUS.md §5` 추가된 항목 있는지 확인
 2. 있으면 즉시 결정 내려주기
 
 ### 7.3 저녁 (사람 20분)
 
 1. 오늘 완료된 작업 검토
 2. 머지 가능한 것 머지
-3. 다음 날 작업 우선순위 조정 (필요 시 `MASTER_PLAN.md` (Part II) 수정)
+3. 다음 날 작업 우선순위 조정 (필요 시 `STATUS.md §3` 수정)
 
 ### 7.4 주간 (팀 회의 1시간)
 
-- `MASTER_PLAN.md` (Part II) 전체 검토
+- `STATUS.md §3` 전체 검토
 - Phase 진행률 확인
 - HUMAN GATE 작업 배치 결정
 - 막힌 항목 해결 방향 합의
@@ -394,11 +394,11 @@ CC 자율: 8~10시간/일 × 4 worktree = 32~40 작업시간/일
 - 의존성 부족 (이전 작업이 완료되지 않음)
 - xv6 빌드 환경 문제
 
-**대응**: CC는 `BLOCKED.md`에 자동 기록 후 다음 작업으로. 사람이 아침 체크 시 결정.
+**대응**: CC는 `STATUS.md §5`에 자동 기록 후 다음 작업으로. 사람이 아침 체크 시 결정.
 
 ### 8.2 CC가 의도와 다른 파일 수정
 
-**증상**: `MASTER_PLAN.md` (Part II)의 `files:` 외 파일이 변경됨
+**증상**: `STATUS.md §3`의 `files:` 외 파일이 변경됨
 
 **원인**: 작업 정의가 모호하거나, CC가 컨텍스트 누락으로 잘못 판단
 
@@ -415,7 +415,7 @@ CC 자율: 8~10시간/일 × 4 worktree = 32~40 작업시간/일
 **대응**:
 1. `regression.sh`가 커밋을 차단했어야 정상
 2. 그래도 발생했다면: `git revert HEAD` 또는 `git checkout daily-YYYYMMDD` 백업 태그로 복귀
-3. `BLOCKED.md`에 root cause 기록
+3. `STATUS.md §5`에 root cause 기록
 
 ### 8.4 LLM 한도 초과
 
@@ -431,7 +431,7 @@ CC 자율: 8~10시간/일 × 4 worktree = 32~40 작업시간/일
 **증상**: 같은 파일(예: `Makefile`)을 여러 worktree가 동시 수정
 
 **대응**:
-- `MASTER_PLAN.md` (Part II)에서 같은 파일을 만지는 작업은 의존성으로 직렬화
+- `STATUS.md §3`에서 같은 파일을 만지는 작업은 의존성으로 직렬화
 - 발생 시 사람이 수동 머지
 
 ---
@@ -471,9 +471,9 @@ CC 자율: 8~10시간/일 × 4 worktree = 32~40 작업시간/일
 - [ ] T-02 `.env.example`, `.gitignore` 정비 (사람, 10분)
 - [ ] T-03 xv6 빌드 환경 검증 (사람, 30분)
 - [ ] `CLAUDE.md` 프로젝트 루트에 복사 (사람, 1분)
-- [ ] `MASTER_PLAN.md` (Part II) 프로젝트 루트에 복사 (사람, 1분)
+- [ ] `STATUS.md §3` 작업 큐 섹션 프로젝트 루트에 준비 (사람, 1분)
 - [ ] `HARNESS.md` (이 파일) 프로젝트 루트에 복사 (사람, 1분)
-- [ ] `BLOCKED.md` 빈 파일 생성 (사람, 1분)
+- [ ] `STATUS.md §5` 블로커 원장 섹션 초기화 (사람, 1분)
 - [ ] 4개 git worktree 셋업 (사람, 10분)
 - [ ] 각 worktree에서 `claude` 첫 실행 → "T-04부터 진행" 지시 (사람, 5분)
 - [ ] 첫 자율 작동 4시간 후 결과 검토 (사람, 30분)
@@ -491,10 +491,10 @@ A. 가능하지만 비효율적이다. 같은 14주에 단일 작업 스트림�
 A. `regression.sh`가 커밋을 차단한다. 차단 통과한 회귀는 daily 백업 태그로 복귀.
 
 **Q. HUMAN GATE 작업이 사람 일정과 안 맞으면?**
-A. 비동기 운영. CC는 HUMAN GATE 도달 시 `BLOCKED.md` 기록 후 의존성 없는 다음 작업으로 이동. 사람이 아침에 승인하면 그때 진행.
+A. 비동기 운영. CC는 HUMAN GATE 도달 시 `STATUS.md §5` 기록 후 의존성 없는 다음 작업으로 이동. 사람이 아침에 승인하면 그때 진행.
 
 **Q. 이 하네스를 다른 프로젝트에 재사용 가능한가?**
-A. `CLAUDE.md`와 `MASTER_PLAN.md` (Part II)는 프로젝트 특화. 하지만 5가지 기둥 구조와 worktree 운영 방식은 일반화 가능.
+A. `CLAUDE.md`와 `STATUS.md §3`는 프로젝트 특화. 하지만 5가지 기둥 구조와 worktree 운영 방식은 일반화 가능.
 
 **Q. 보고서에 하네스 엔지니어링 자체를 언급해도 되나?**
 A. 권장. Development Process Document (가이드 §5 산출물 #3)에서 "AI 코딩 도구의 책임감 있는 활용"이 평가 기준이라면, 하네스 설계는 그 자체로 엔지니어링 산출물이다. 단, 핵심 구현(xv6 커널 수정)을 CC가 했다는 사실은 정직하게 명시한다.

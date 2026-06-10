@@ -81,9 +81,10 @@ exist.
 The course guideline §2 demands that at least one — preferably more —
 of *processes, threads, synchronisation, scheduling, virtual memory,
 file systems, IPC, system calls* be **directly designed and
-implemented**. Liberal_OS **directly implements seven** core OS concepts
-in modified xv6 source (rows 1–7), **extends them with two Phase 8/9
-kernel subsystems** — a fix verifier and a semantic response cache
+implemented**. Liberal_OS **directly implements seven core mechanisms
+plus two Phase 8/9 subsystems (nine in total)**
+in modified xv6 source (rows 1–7), **the two Phase 8/9
+kernel subsystems being** — a fix verifier and a semantic response cache
 (rows 8–9, the *verify+rollback* and *semantic-cache* patterns) — and
 **uses one more** concept (the file system, read-only for input) as the
 final row:
@@ -96,7 +97,7 @@ final row:
 | 4 | Mutual exclusion on shared resource | **Synchronisation (sleeplocks)** | `console.c`, `sysproc.c`, new syscalls 24 & 25 | A kernel sleeplock (`cons_write_lock`) wraps `consolewrite` so per-write atomicity holds against sibling user writes; a second sleeplock (`proxy_lock`) plus syscalls `proxylock(2)` / `proxyunlock(2)` serialise the *send + recv* of one `proxy_call` against any other agent's. |
 | 5 | Differentiated agent service | **Scheduling (priority)** | `proc.c` `scheduler()` | Two-pass selection (max-priority RUNNABLE first, multi-CPU fallback) plus `setprio(int)` syscall clamped to nice-style `[-20, 19]`. Default `priority = 0` reduces to baseline Round Robin. |
 | 6 | Fault containment | **Process isolation** | inherent in xv6 | Each agent is its own `struct proc` with its own page table; the `procfields` user-space smoke confirms that fork+pipe semantics are not regressed by our struct extension. |
-| 7 | Observability | **System calls** | `syscall.c/h`, `sysproc.c`, `user.h`, `usys.pl` | Six new syscalls: `setrole(22)`, `agentstat(23)`, `proxylock(24)`, `proxyunlock(25)`, `setprio(26)`. `agentstat` walks the proc table and emits a one-line JSON snapshot. |
+| 7 | Observability | **System calls** | `syscall.c/h`, `sysproc.c`, `user.h`, `usys.pl` | Five new syscalls (22–26): `setrole(22)`, `agentstat(23)`, `proxylock(24)`, `proxyunlock(25)`, `setprio(26)`. `agentstat` walks the proc table and emits a one-line JSON snapshot. Rows 8–9 add six more (27–32), for eleven new syscalls in total. |
 | 8 | Kernel-arbitrated fix verification + rollback (**Pattern A**) | **System calls + synchronisation** | `verifier.{c,h}`, `sysproc.c`, new syscalls 27–29 | The LLM is only a *proposer*; the kernel holds final authority. A pure verifier `verify_fix()` checks each fix proposal's structural integrity, numeric ranges, action whitelist, and a protected-process rule. `verifyfix(27)` resolves proc state into a `sys_snapshot` so the verifier never walks `proc[]`; `checkpoint(28)`/`restore(29)` (a spinlock-guarded kernel slot) roll back to the last accepted state on rejection. The evaluator's bounded retry loop drives **VERIFY FAIL → ROLLBACK → RETRY → ACCEPT**. |
 | 9 | Kernel semantic response cache (**Pattern B**) | **File system + system calls** | `cache.{c,h}`, `mkfs.c`, new syscalls 30–32 | A 64-slot RAM table keyed by FNV-1a(`role\|prompt`) with per-entry MinHash signatures for paraphrase (semantic) hits via an integer Jaccard threshold, backed by a `/cache.bin` **disk overlay** (append on set; sequential scan + RAM promotion on miss) through the inode API (`writei`/`readi`). `cacheget(30)`/`cacheset(31)`/`cacheclear(32)` expose it; `proxy_call` consults the cache first and **short-circuits the PROXY_REQ (the LLM call) on a hit**. This is also where the kernel *writes* to the xv6 file system, beyond the read-only input use in the final row. |
 | — | Input persistence | **File system (used, *not* modified)** | none — uses xv6's existing fs | The input log lives as a real file in the xv6 file system (`short.log`, copied in at `fs.img` build time); agents read it through standard `open(2)` / `read(2)`. This row is listed for completeness — we did **not** add to xv6's filesystem code, so it does **not** count toward the seven directly-implemented concepts above. |
@@ -245,11 +246,12 @@ detail in `HARNESS.md`; in summary:
   inviolable constraints (no Linux primitives, no API keys in source,
   no force-push, etc.).
 * `MASTER_PLAN.md` (~865 lines) — Part I records design decisions
-  (OS-mapping table, host-guest separation, evaluation plan) and
-  Part II lists every Phase-1-to-7 work item with dependency graph,
+  (OS-mapping table, host-guest separation, evaluation plan); the
+  per-task work records (formerly Part II) now live in `STATUS.md` §3,
+  listing every work item with dependency graph,
   files-list, verify command, estimate.
-* `BLOCKED.md` — protocol for the agent to surrender a task and write
-  a structured incident note.
+* `STATUS.md` §5 — blocker ledger; protocol for the agent to surrender
+  a task and write a structured incident note.
 * `tests/autotest.sh` (~76 lines) — headless QEMU + smoke gate that
   finishes in **~6 seconds** of wall-clock with `PASS` or `FAIL`.
 * `tests/regression.sh` (~65 lines) — pre-commit gate that chains
@@ -791,7 +793,10 @@ implementing every OS primitive its agent runtime depends on **inside
 xv6 source**, not by reaching for a Linux user-space library. Seven of
 the eight enumerated OS concepts (processes, synchronisation,
 scheduling, IPC, syscalls, isolation, observability) are directly
-implemented in modified xv6 code (§3 entries 1–7); the file system is
+implemented in modified xv6 code (§3 entries 1–7), and two Phase 8/9
+kernel subsystems (the verify+rollback verifier and the semantic
+response cache, §3 entries 8–9) extend them — nine directly-implemented
+mechanisms in total; the file system is
 used unmodified to deliver input. Threads are excluded because xv6
 does not support intra-process threading natively.
 
@@ -818,7 +823,7 @@ for the deferred experiments without a redesign.
 | `xv6-src/kernel/console.c` | per-write atomicity + echo disable | – |
 | `xv6-src/kernel/printf.c` | PANIC_DUMP | – |
 | `xv6-src/kernel/agent_log.h` | `AGENT_LOG` macro | – |
-| `xv6-src/kernel/sysproc.c`, `syscall.{c,h}` | six new syscalls | – |
+| `xv6-src/kernel/sysproc.c`, `syscall.{c,h}` | eleven new syscalls (22–32) | – |
 | `xv6-src/user/triage.c` | five-stage pipeline orchestrator | – |
 | `xv6-src/user/parser.c` … `evaluator.c` | five agents | – |
 | `xv6-src/user/proxy_client.h` | header-only RPC, sleeplock-protected | – |
@@ -831,7 +836,8 @@ for the deferred experiments without a redesign.
 
 LoC numbers will be filled in at the final submission cut; as of the
 last automated count the project sums to ~3,400 lines across
-kernel/user/host/bench/tests (excluding the imported xv6 baseline).
+kernel/user/host/bench/tests (excluding the imported xv6 baseline;
+excludes Phase 8/9: +~466 LOC for `verifier.c` (113) + `cache.c` (353)).
 Final values land in `PROCESS.md` §5 alongside the wall-clock budget.
 
 ---

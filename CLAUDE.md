@@ -11,7 +11,7 @@
 
 - **방향**: GuideLine §2의 A (OS for LLM)
 - **반드시 기억할 한 줄**: "API를 multiprocessing으로 호출"이 아니라 **"LLM 프로세스를 xv6 커널이 직접 관리"**.
-- **설계·일정 통합본**: `MASTER_PLAN.md` 참조 (Part I 설계 · Part II 작업 큐). 본문 수정 금지, 단 Part II의 T-NN 상태(`[ ]`/`[~]`/`[x]`)는 CC가 작업 진행에 따라 갱신.
+- **설계 통합본**: `MASTER_PLAN.md` Part I 설계 참조 (본문 수정 금지) · **작업 큐**: `STATUS.md §3` 참조. T-NN 상태(`[ ]`/`[~]`/`[x]`)는 CC가 작업 진행에 따라 갱신.
 - **하네스 설계 근거**: `HARNESS.md` 참조
 
 ---
@@ -25,9 +25,9 @@
 3. **xv6는 네트워크 스택이 없다.** LLM 호출은 반드시 Linux 호스트의 Proxy Daemon 경유 (virtio serial / pipe).
 4. **API 키는 `.env`에서만 로드.** 코드/주석/테스트/커밋 메시지에 절대 하드코딩 금지. 커밋 전 `git diff | grep -iE 'up[-_][a-z0-9_-]{20,}'`로 자가 검증.
 5. **평가 측정 시 반드시 `--mode replay` 사용.** LLM 비결정성 통제.
-6. **`scheduler()` 함수, `proc.c`의 핵심 부분, `sched.c` 전체는 🔴 HUMAN GATE.** 수정 전 반드시 사람 승인 대기. `BLOCKED.md`에 사유 기록 후 다음 작업으로.
+6. **`scheduler()` 함수, `proc.c`의 핵심 부분, `sched.c` 전체는 🔴 HUMAN GATE.** 수정 전 반드시 사람 승인 대기. `STATUS.md §5`에 사유 기록 후 다음 작업으로.
 7. **`git push` 금지.** push는 사람이 직접 수행. `.claude/settings.json`에서 차단되어 있어야 정상.
-8. **`MASTER_PLAN.md` 본문(Part I, 부록), `README.md`, `HARNESS.md` 수정 금지.** 이 세 파일은 결정 문서. 변경 사항이 있다면 사람에게 보고. `MASTER_PLAN.md` Part II(§11~§18)의 T-NN 상태 갱신만 예외적으로 허용.
+8. **`MASTER_PLAN.md` 본문(Part I, 부록), `README.md`, `HARNESS.md` 수정 금지.** 이 세 파일은 결정 문서. 변경 사항이 있다면 사람에게 보고. `STATUS.md §3`의 T-NN 상태 갱신만 예외적으로 허용.
 
 ---
 
@@ -38,13 +38,13 @@
 ### 2.1 작업 시작
 1. `git status` — 작업 트리가 깨끗한지 확인
 2. `git pull --rebase` — 다른 worktree의 최신 변경 흡수
-3. `MASTER_PLAN.md` Part II (§11~§18) 열기 — `[ ]` TODO 중 의존성(`depends:`)이 모두 `[x]`인 가장 작은 번호 작업 선택
+3. `STATUS.md §3` 열기 — `[ ]` TODO 중 의존성(`depends:`)이 모두 `[x]`인 가장 작은 번호 작업 선택
 4. 해당 작업을 `[~]` IN PROGRESS로 상태 변경, 즉시 커밋 (`chore(tasks): start T-NN`)
 
 ### 2.2 작업 수행
-1. 작업에 명시된 **건드릴 파일**(`files:`)만 수정. 다른 파일을 만지고 싶으면 `BLOCKED.md`에 사유 기록 후 사람에게 보고.
+1. 작업에 명시된 **건드릴 파일**(`files:`)만 수정. 다른 파일을 만지고 싶으면 `STATUS.md §5`에 사유 기록 후 사람에게 보고.
 2. 30분(약 20개 메시지)마다 자가 진단:
-   - 같은 검증이 반복 실패 중인가? → 중단, `BLOCKED.md` 기록
+   - 같은 검증이 반복 실패 중인가? → 중단, `STATUS.md §5` 기록
    - 의도와 다른 파일을 만지고 있나? → 중단, 원점 복귀
    - 추측으로 디버깅하고 있나? → 데이터(로그, stack trace)부터 본다
 
@@ -55,7 +55,7 @@
 4. 실패 시: `out/last-fail.log`, `out/last-fail.diff` 읽기 — 추측 금지
 
 ### 2.4 작업 종료
-1. `MASTER_PLAN.md` Part II의 해당 작업 상태를 `[x]` DONE으로 변경
+1. `STATUS.md §3`의 해당 작업 상태를 `[x]` DONE으로 변경
 2. 커밋: `feat(T-NN): <한 줄 요약>` (Conventional Commits)
 3. 커밋 전 `git diff --staged | grep -iE 'up[-_][a-z0-9_-]{20,}|api[_-]?key'` 자가 검증 (API 키 누설 방지)
 4. 절대 `git push` 하지 않는다
@@ -67,10 +67,10 @@
 ```
 liberal_os/
 ├── CLAUDE.md          # 이 파일 (읽기만, 수정 금지)
-├── MASTER_PLAN.md     # 설계·실행·일정 통합 마스터 (Part II T-NN 상태만 CC가 갱신, 그 외 수정 금지)
+├── MASTER_PLAN.md     # 설계 마스터 (Part I, 수정 금지; T-NN 상태는 STATUS.md §3에서 갱신)
 ├── MASTER_PLAN.en.md  # MASTER_PLAN.md의 영문판 (수정 금지)
 ├── HARNESS.md         # 하네스 설계 문서 (수정 금지)
-├── BLOCKED.md         # CC가 막혔을 때 보고하는 파일
+├── STATUS.md          # CC가 막혔을 때 보고하는 파일 (§5 blocker ledger), T-NN 작업 기록(§3)
 ├── README.md          # 기술 카탈로그 (수정 금지)
 ├── .env.example       # 키 자리표시 (실 키는 .env, gitignore)
 ├── .claude/
@@ -230,7 +230,7 @@ Max 20x 요금제 기준. 작업 유형에 따라 모델 결정:
 ### Opus를 쓸 때 (~15% 작업)
 - xv6 `proc` 구조체 확장 같은 핵심 설계
 - 스케줄러 알고리즘 결정
-- 디버깅 30분 이상 막혔을 때 (1회 한정, 그래도 안 풀리면 `BLOCKED.md`)
+- 디버깅 30분 이상 막혔을 때 (1회 한정, 그래도 안 풀리면 `STATUS.md §5`)
 - Technical Report 구조 설계, 영어 논리 검토
 
 ### Sonnet을 쓸 때 (기본, ~85% 작업)
@@ -244,7 +244,7 @@ Max 20x 요금제 기준. 작업 유형에 따라 모델 결정:
 
 ## 10. 막혔을 때
 
-다음 중 하나면 즉시 작업 중단, `BLOCKED.md`에 기록:
+다음 중 하나면 즉시 작업 중단, `STATUS.md §5`에 기록:
 
 - 동일 검증을 3번 이상 실패
 - 30분 이상 같은 파일을 고치고 있음
@@ -253,7 +253,7 @@ Max 20x 요금제 기준. 작업 유형에 따라 모델 결정:
 - 의도와 다른 파일을 수정해야 할 것 같은 상황
 - HUMAN GATE 작업에 도달
 
-**`BLOCKED.md` 형식**:
+**`STATUS.md §5` 형식**:
 ```markdown
 ## T-NN: <작업명> — BLOCKED at <ISO timestamp>
 
@@ -279,8 +279,8 @@ Max 20x 요금제 기준. 작업 유형에 따라 모델 결정:
 - [ ] `make autotest` 통과
 - [ ] `make regression` 통과
 - [ ] `git diff --staged | grep -iE 'up[-_][a-z0-9_-]{20,}|api[_-]?key'` 결과 없음
-- [ ] 수정 파일이 `MASTER_PLAN.md` Part II 해당 작업의 `files:` 목록과 일치
-- [ ] `MASTER_PLAN.md` Part II의 T-NN 상태가 적절히 갱신됨
+- [ ] 수정 파일이 `STATUS.md §3` 해당 작업의 `files:` 목록과 일치
+- [ ] `STATUS.md §3`의 T-NN 상태가 적절히 갱신됨
 - [ ] 커밋 메시지가 Conventional Commits 형식
 
 하나라도 빠지면 커밋하지 않는다.
@@ -289,4 +289,4 @@ Max 20x 요금제 기준. 작업 유형에 따라 모델 결정:
 
 ## 12. 끝으로
 
-이 매뉴얼은 살아있는 문서다. 작업 중 명확하지 않은 부분이 있으면 `BLOCKED.md`에 기록하고 사람에게 보고한다. **추측보다 보고를, 추정보다 데이터를.**
+이 매뉴얼은 살아있는 문서다. 작업 중 명확하지 않은 부분이 있으면 `STATUS.md §5`에 기록하고 사람에게 보고한다. **추측보다 보고를, 추정보다 데이터를.**
