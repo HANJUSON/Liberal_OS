@@ -161,7 +161,14 @@ cache_disk_append(const struct cache_slot *rec)
     return;                                // overlay file absent: RAM-only
   }
   ilock(ip);
-  writei(ip, 0, (uint64)rec, ip->size, sizeof(*rec));
+  uint oldsz = ip->size;
+  if (writei(ip, 0, (uint64)rec, ip->size, sizeof(*rec)) != sizeof(*rec)) {
+    // A short/failed append (disk full, over MAXFILE) would leave a partial
+    // record and desync the fixed-size framing every later scan relies on.
+    // Roll the size back so the partial tail is ignored (never appended).
+    ip->size = oldsz;
+    iupdate(ip);
+  }
   iunlockput(ip);
   end_op();
 }
@@ -188,6 +195,9 @@ cache_disk_scan(const char *role, uint64 key, const uint64 *qsig,
   for (off = 0; off + sizeof(rec) <= sz; off += sizeof(rec)) {
     if (readi(ip, 0, (uint64)&rec, off, sizeof(rec)) != sizeof(rec))
       break;
+    // /cache.bin is user-writable; a planted record may have an unterminated
+    // val. Bound it before any safestrcpy reads past the field.
+    rec.val[CACHE_VALLEN - 1] = 0;
     if (rec.key == key) {
       exact = rec;
       have_exact = 1;                      // keep scanning: last write wins
