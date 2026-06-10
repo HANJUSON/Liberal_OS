@@ -69,18 +69,18 @@ All five call the same backend: **Upstage Solar Pro 3** through a Proxy Daemon.
 **Why an evaluator? — LLM output is non-deterministic.**
 
 ```
-Worker agent                          Evaluator agent
-     |                                      |
-     |-- result via pipe ------------------>|
-     |                                      |--- quality check (LLM)
-     |<-- retry signal (kill/SIGUSR) -------|--- fail (under threshold)
-     |                                      |
-     |-- new result ----------------------->|--- pass
-     |                                      |
+Worker agent                              Evaluator agent
+     |                                          |
+     |-- result via pipe --------------------- >|
+     |                                          |--- quality check (LLM)
+     |<-- retry signal (kill + wakeup) -------- |--- FAIL (under threshold)
+     |                                          |
+     |-- new result --------------------------- |--- PASS
+     |                                          |
                                   forward to next stage
 ```
 
-- Implemented with xv6 `kill()` + `sleep/wakeup`.
+- Implemented with xv6 `kill()` + `sleep/wakeup` (xv6 has no `SIGUSR` — a generic `kill` plus the scheduler's wakeup channel is what we have to work with).
 - **Bounded retry**: max 3 attempts, then surface failure to the orchestrator.
 - This is a real OS-level **signaling + synchronization** problem — not a Python `if`/`while` loop.
 
@@ -88,24 +88,26 @@ Worker agent                          Evaluator agent
 
 ## Slide 5 — Part 2: OS Adaptation (brief)
 
-**Where the OS shows up — 7 mechanisms designed, 1 reused.**
+**Where the OS shows up — 9 mechanisms designed, 1 reused.**
 
-| # | Component                | OS concept              | xv6 file(s) we modified           |
-|---|--------------------------|-------------------------|-----------------------------------|
-| 1 | Orchestrator             | Process management      | `proc.h`, `proc.c` (fork-extend)  |
-| 2 | Agent → Agent transport  | IPC (pipes)             | `pipe.c`                          |
-| 3 | Retry path               | Signals + wakeup        | `proc.c`, `trap.c`                |
-| 4 | Shared context guard     | Synchronization (locks) | `spinlock.c`                      |
-| 5 | Per-agent priority       | Scheduling              | `sched.c` (priority queue)        |
-| 6 | Fault isolation          | Address-space isolation | xv6 default, exercised by design  |
-| 7 | Introspection            | New system calls        | `syscall.c/h`, `sysproc.c`        |
-| – | Agent context persistence| File system (reused)    | xv6 fs (no kernel mod yet — F-01) |
+| # | Component                     | OS concept                       | xv6 file(s) we modified                                |
+|---|-------------------------------|----------------------------------|--------------------------------------------------------|
+| 1 | Orchestrator                  | Process management               | `proc.h`, `proc.c` (fork-extend)                       |
+| 2 | Agent → Agent transport       | IPC (pipes)                      | `pipe.c`, `user/triage.c`                              |
+| 3 | Retry path                    | Signals + wakeup                 | `proc.c` (`kill` + `sleep`/`wakeup`)                   |
+| 4 | Shared context guard          | Synchronization (sleeplocks)     | `console.c`, `sysproc.c` (cons_write_lock, proxy_lock) |
+| 5 | Per-agent priority            | Scheduling                       | `proc.c` `scheduler()` (2-pass max-priority)           |
+| 6 | Fault isolation               | Address-space isolation          | xv6 default, exercised by design                       |
+| 7 | Introspection                 | System calls (5 — nos. 22–26)    | `syscall.{c,h}`, `sysproc.c`                           |
+| 8 | Kernel verify + rollback (**Pattern A**) | Kernel verifier + checkpoint (3 syscalls — 27–29) | `kernel/verifier.{c,h}`, `sysproc.c`         |
+| 9 | In-kernel semantic cache (**Pattern B**) | File system + system calls (3 syscalls — 30–32)   | `kernel/cache.{c,h}`, `mkfs/mkfs.c`, `sysproc.c` |
+| – | Agent context persistence     | File system (reused, read-only)  | xv6 fs (no kernel mod yet — F-01)                      |
 
 - Rule of thumb: if it could have been `multiprocessing` or `cgroups`, we did **not** use it.
 - **12 new syscalls shipped (nos. 22–33)** — from `setrole(2)` / `agentstat(2)` introspection
   through the **verify+rollback** (27–29) and **semantic-cache** (30–32) families — plus a userspace `priotest`.
 
-**Two kernel-level patterns that set this work apart:**
+**Two kernel-level patterns that set this work apart (rows 8 & 9):**
 
 - **Pattern A — in-kernel verifier (`kernel/verifier.c`, syscalls 27–29):** every LLM-proposed fix is guarded by field / range / whitelist / protected-process checks before it can take effect. **FAIL → restore (pid-tagged checkpoint) + amend the fix per the kernel's verdict code → retry; PASS → accept.** Convergence is *verdict-driven*: the correction is a causal function of *why* the kernel rejected the fix (`VERIFY_ERR_RANGE` → clamp severity, etc.), not a retry counter. The kernel, not userspace, owns the safety contract.
 - **Pattern B — in-kernel response cache (`kernel/cache.c`, syscalls 30–32):** short-circuits the LLM call *before* a `PROXY_REQ` is even emitted — **FNV-1a** exact match + **MinHash/Jaccard** semantic (paraphrase) match, backed by a `/cache.bin` disk overlay. Caching becomes an OS service, not a per-script dict.
@@ -181,7 +183,8 @@ Worker agent                          Evaluator agent
 **Screenshot 5 — `priotest` priority scheduling**
 - 6 processes spawned with descending priorities (5 → 0).
 - Completion order tracked: `DONE i=0 prio=5 t=0` first, `DONE i=5 prio=0 t=0` last.
-- Spearman correlation **ρ = −1.000** between priority and completion rank → priority scheduler is doing what we designed.
+- Spearman correlation **ρ = −1.000** in the captured single shot.
+- Honest disclaimer: across 3 reproductions the last pair (prio 0 vs prio 1) sometimes flips inside the same timer tick, giving ρ ≈ −0.94; the priority-respects-the-rank conclusion holds in every run (median ≈ −0.97).
 
 ---
 
@@ -192,11 +195,13 @@ Worker agent                          Evaluator agent
 - Visible `EVAL_RETRY` events for two log lines → evaluator-supervisor loop firing on real output.
 - Final `TRIAGE_DONE` after bounded retries.
 
-**Screenshot 7 — `make regression` 3/3 PASS**
-- Gate 1: headless xv6 boot + smoke.
-- Gate 2: shell interaction (commands echo, basic syscalls).
-- Gate 3: mock proxy end-to-end.
-- All green → the design is reproducible from a clean checkout, not just a one-off demo.
+**Screenshot 7 — `make regression` 5/5 PASS** *(was 3-gate before Phase 10; T-90 folded the Pattern A/B tests in)*
+- Gate 1: headless xv6 boot + smoke (`autotest`).
+- Gate 2: shell interaction + mock proxy end-to-end (`e2e_mock` + `triage`).
+- Gate 3: mock 5-stage triage round-trip.
+- Gate 4: **`test_verifier.sh`** — `VERIFY_FAIL → ROLLBACK → RETRY → ACCEPT` (eval_retries=2, ok=True).
+- Gate 5: **`test_cache.sh`** — `proxy_reqs_saved=2` (exact + paraphrase short-circuit).
+- All green → the design is reproducible from a clean checkout, not just a one-off demo. (Bench script also exposes a 6th evidence gate via `bench/capture_patterns.py` → `docs/patterns_demo.txt`: `VERIFY_FAIL=2 ROLLBACK=2 RETRY=2 ACCEPT=5 CACHE_HIT=2`.)
 
 **Talking-point summary**
 - Five LLM agents, each a real xv6 process.
@@ -207,13 +212,19 @@ Worker agent                          Evaluator agent
 
 ## Backup / Q&A — Limitations and What's Next
 
-- **Filesystem usage is shallow** (read-only context loading). Persistent agent state via a new fs-backed mechanism is tracked as **F-01**.
+- **Filesystem writes are limited to the kernel semantic cache** (`/cache.bin`, via the inode API). Agent-context persistence through a richer fs-backed mechanism — checkpoint/resume of an in-flight pipeline, swap-out of an idle agent — is still tracked as **F-01**.
 - **Live-mode benchmark** at `BENCH_N=5` is still a human-run step (T-62); reported numbers in this deck use `replay`/`mock` for reproducibility.
+- **`retry_context` is recorded, not yet re-fed.** The host accumulates each evaluator violation reason into `injected_sample` / `retry_context` JSON fields, but it is *not* threaded back into the model prompt yet — partly because line-accumulated `PROXY_RES` frames can desync the wire format, partly because the kernel cache would short-circuit the re-issued prompt. Proper fix is guest-side embedding of the reason into the next prompt (STATUS §5 future task).
 - **Single-host scope**: no multi-node scheduling; agents share one xv6 guest.
 - **Future work**:
   - Planner-executor agents on top of the current static DAG.
   - Proxy multiplexing for higher live throughput.
   - RAG / ReAct loops as additional agent roles.
+
+**Companion artifacts in the repo** (GuideLine §5 deliverables #2 / #3):
+- `docs/TECHNICAL_REPORT.md` — system architecture, OS-concept mapping in depth (incl. §3 row 8/9 and §10.8 for Patterns A/B).
+- `PROCESS.md` — weekly progress, design decisions (D-01..D-10), issue ledger (I-01..I-11).
+- Operational ledger: `STATUS.md §3` (T-NN queue), `STATUS.md §5` (blocker history).
 
 ---
 
