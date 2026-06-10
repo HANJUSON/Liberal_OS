@@ -1,0 +1,17 @@
+=== Liberal_OS T-A1 memory-quota evidence (xv6: quotatest + agentstat) ===
+captured from a real QEMU run (kernel-side enforcement, no mock involved).
+
+The kernel caps each agent's resident heap in growproc(); an sbrk that
+would push the process past its cap is denied (-1) and logged, and the
+agentstat introspection syscall now reports the quota fields per process.
+
+  KERNEL DENIAL : [AGENT][warn] quota: pid=3 role=none denied grow to 14 pages (cap=8)
+  TEST RESULT   : QUOTA_TEST_PASS   (grow-within-cap ok, grow-past-cap -1, lifted cap re-enables)
+  AGENTSTAT     : per-proc JSON now carries rss_kb / quota_pg / qdenied
+
+--- raw xv6 console transcript ---
+$ quotatest
+[AGENT][warn] quota: pid=3 role=none denied grow to 14 pages (cap=8)
+QUOTA_TEST_PASS
+$ agentstat
+[{"pid":1,"name":"init","role":"none","prio":0,"st":"sleep","rss_kb":16,"quota_pg":0,"qdenied":0},{"pid":2,"name":"sh","role":"none","prio":0,"st":"sleep","rss_kb":20,"quota_pg":0,"qdenied":0},{"pid":4,"name":"agentstat","role":"none","prio":0,"st":"run","rss_kb":16,"quota_pg":0,"qdenied":0}]

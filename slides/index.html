@@ -927,7 +927,7 @@
             <div class="shot-img"><img src="../out/screenshots/screenshot4.png" alt="agentstat syscall output" /></div>
             <div class="shot-cap">
               <b>Shot 4 · <code class="inline">agentstat</code> syscall</b>
-              New kernel syscall returns JSON for every proc: <code class="inline">pid</code>, <code class="inline">name</code>, <code class="inline">role</code>, <code class="inline">prio</code>, <code class="inline">st</code>. Userspace <code class="inline">ps</code> could not produce the <code class="inline">role</code>/<code class="inline">prio</code> fields.
+              New kernel syscall returns JSON for every proc: <code class="inline">pid</code>, <code class="inline">name</code>, <code class="inline">role</code>, <code class="inline">prio</code>, <code class="inline">st</code>, plus the memory-quota fields <code class="inline">rss_kb</code>, <code class="inline">quota_pg</code>, <code class="inline">qdenied</code>. Userspace <code class="inline">ps</code> could not produce the <code class="inline">role</code>/<code class="inline">prio</code>/quota fields.
             </div>
           </div>
           <div class="shot">
@@ -956,6 +956,8 @@
             <div class="stat-cap">distinct xv6 processes per triage run — one per agent role.</div>
           </div>
         </div>
+
+        <p class="note">Memory quota (T-A1) in action — the kernel caps each agent's resident heap and <code class="inline">growproc</code> denies an over-cap <code class="inline">sbrk</code>: <code class="inline">[AGENT][warn] quota: pid=3 role=none denied grow to 14 pages (cap=8)</code> → <code class="inline">QUOTA_TEST_PASS</code> (full transcript: <code class="inline">docs/quota_demo.txt</code>).</p>
       </div>
     </section>
 
@@ -976,8 +978,8 @@
           <div class="shot">
             <div class="shot-img"><img src="../out/screenshots/screenshot7.png" alt="make regression PASS" /></div>
             <div class="shot-cap">
-              <b>Shot 7 · <code class="inline">make regression</code> 5 / 5 PASS</b>
-              Gate 1: headless xv6 boot + smoke. Gate 2: shell + mock proxy e2e. Gate 3: triage round-trip. <strong>Gate 4: <code class="inline">test_verifier.sh</code></strong> — VERIFY_FAIL → ROLLBACK → RETRY → ACCEPT. <strong>Gate 5: <code class="inline">test_cache.sh</code></strong> — <code class="inline">proxy_reqs_saved=2</code>. (6th evidence gate via <code class="inline">bench/capture_patterns.py</code> → <code class="inline">docs/patterns_demo.txt</code>: <code class="inline">VERIFY_FAIL=2 ROLLBACK=2 RETRY=2 ACCEPT=5 CACHE_HIT=2</code>.)
+              <b>Shot 7 · <code class="inline">make regression</code> 6 / 6 PASS</b>
+              Gate 1: headless xv6 boot + smoke (<code class="inline">verifiertest</code> · <code class="inline">cachetest</code> · <code class="inline">quotatest</code> → <code class="inline">QUOTA_TEST_PASS</code>). Gate 2: shell + mock proxy e2e. Gate 3: triage round-trip. <strong>Gate 4: <code class="inline">test_verifier.sh</code></strong> — VERIFY_FAIL → ROLLBACK → RETRY → ACCEPT. <strong>Gate 5: <code class="inline">test_cache.sh</code></strong> — <code class="inline">proxy_reqs_saved=2</code>. <strong>Gate 6: <code class="inline">bench/capture_patterns.py</code></strong> — both patterns live in one run: <code class="inline">VERIFY_FAIL=2 ROLLBACK=2 RETRY=2 ACCEPT=5 CACHE_HIT=2</code>.
             </div>
           </div>
         </div>

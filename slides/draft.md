@@ -177,9 +177,13 @@ Worker agent                              Evaluator agent
 ## Slide 9 — Part 4: Demo (2/3) — OS-Level Visibility
 
 **Screenshot 4 — `agentstat` system call**
-- New syscall returns a JSON snapshot of every process: `pid`, `name`, `role`, `prio`, `st`.
-- Example baseline: `[{"pid":1,"name":"init","role":"none",...}, ...]`
-- This is **kernel-side introspection** — userspace `ps` could not produce the `role`/`prio` fields without our `proc` extension.
+- New syscall returns a JSON snapshot of every process: `pid`, `name`, `role`, `prio`, `st`, plus the memory-quota fields `rss_kb`, `quota_pg`, `qdenied`.
+- Example: `[{"pid":1,"name":"init","role":"none",...,"rss_kb":16,"quota_pg":0,"qdenied":0}, ...]`
+- This is **kernel-side introspection** — userspace `ps` could not produce the `role`/`prio`/quota fields without our `proc` extension.
+
+**Memory quota (T-A1) in action** — captured in `docs/quota_demo.txt`:
+- `quotatest` caps itself, then over-grows: the kernel denies it — `[AGENT][warn] quota: pid=3 role=none denied grow to 14 pages (cap=8)` → `QUOTA_TEST_PASS`.
+- `growproc` enforces the cap; the resident heap can't exceed the per-process budget. Per-process memory resource control, owned by the OS.
 
 **Screenshot 5 — `priotest` priority scheduling**
 - 6 processes spawned with descending priorities (5 → 0).
@@ -196,13 +200,14 @@ Worker agent                              Evaluator agent
 - Visible `EVAL_RETRY` events for two log lines → evaluator-supervisor loop firing on real output.
 - Final `TRIAGE_DONE` after bounded retries.
 
-**Screenshot 7 — `make regression` 5/5 PASS** *(was 3-gate before Phase 10; T-90 folded the Pattern A/B tests in)*
-- Gate 1: headless xv6 boot + smoke (`autotest`).
+**Screenshot 7 — `make regression` 6/6 PASS** *(was 3-gate before Phase 10; T-90 folded the Pattern A/B tests in)*
+- Gate 1: headless xv6 boot + smoke (`autotest`) — `verifiertest` · `cachetest` · `quotatest` (`QUOTA_TEST_PASS`).
 - Gate 2: shell interaction + mock proxy end-to-end (`e2e_mock` + `triage`).
 - Gate 3: mock 5-stage triage round-trip.
 - Gate 4: **`test_verifier.sh`** — `VERIFY_FAIL → ROLLBACK → RETRY → ACCEPT` (eval_retries=2, ok=True).
 - Gate 5: **`test_cache.sh`** — `proxy_reqs_saved=2` (exact + paraphrase short-circuit).
-- All green → the design is reproducible from a clean checkout, not just a one-off demo. (Bench script also exposes a 6th evidence gate via `bench/capture_patterns.py` → `docs/patterns_demo.txt`: `VERIFY_FAIL=2 ROLLBACK=2 RETRY=2 ACCEPT=5 CACHE_HIT=2`.)
+- Gate 6: **`bench/capture_patterns.py`** — both patterns live in one run → `docs/patterns_demo.txt`: `VERIFY_FAIL=2 ROLLBACK=2 RETRY=2 ACCEPT=5 CACHE_HIT=2`.
+- All green → the design is reproducible from a clean checkout, not just a one-off demo.
 
 **Talking-point summary**
 - Five LLM agents, each a real xv6 process.
